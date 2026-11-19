@@ -28,25 +28,25 @@ def engineer(df):
     return df
 
 
-# Impute, engineer, cap, encode, and scale with statistics fit on X_train only
+# Impute, engineer, select, cap, encode, scale, and PCA with statistics fit on X_train only
 class Preprocessor:
-    def __init__(self, zero_as_missing=(), num_strategy="median", cap=(), cap_factor=1.5, ordinal=None, scaler="standard"):
-        self.zero_as_missing, self.num_strategy = list(zero_as_missing), num_strategy
+    def __init__(self, zero_as_missing=(), num_strategy="median", drop=(), cap=(), cap_factor=1.5, ordinal=None, scaler="standard", pca=None):
+        self.zero_as_missing, self.num_strategy, self.drop = list(zero_as_missing), num_strategy, list(drop)
         self.cap, self.cap_factor = list(cap), cap_factor
-        self.ordinal, self.scaler = ordinal or {}, scaler
+        self.ordinal, self.scaler, self.pca = ordinal or {}, scaler, pca
 
-    # Learns fill values, IQR bounds, categories, and scaling stats from X
+    # Learns fill values, IQR bounds, categories, scaling stats, and PCA components from X
     def fit(self, X):
         X = self.zero_to_nan(X)
         num = X.select_dtypes("number").columns
-        cat = X.columns.difference(num)
-        self.fill = {**getattr(X[num], self.num_strategy)().to_dict(), **X[cat].mode().iloc[0].to_dict()}
-        X = engineer(X.fillna(self.fill))
+        self.fill = {**getattr(X[num], self.num_strategy)().to_dict(), **X[X.columns.difference(num)].mode().iloc[0].to_dict()}
+        X = engineer(X.fillna(self.fill)).drop(columns=self.drop)
 
         q1, q3 = X[self.cap].quantile(0.25), X[self.cap].quantile(0.75)
         self.bounds = (q1 - self.cap_factor * (q3 - q1), q3 + self.cap_factor * (q3 - q1))
         X = self.clip(X)
 
+        cat = X.select_dtypes(exclude="number").columns
         self.onehot = {c: sorted(X[c].unique()) for c in cat if c not in self.ordinal}
         X = self.encode(X)
         self.columns = X.columns
@@ -58,13 +58,16 @@ class Preprocessor:
                 "robust": lambda: (X.median(), X.quantile(0.75) - X.quantile(0.25)),
             }[self.scaler]()
             self.center, self.spread = center, spread.replace(0, 1)
+
+        if self.pca:
+            self.fit_pca(self.scale(X).to_numpy(dtype=float))
         return self
 
     # Applies the fitted steps to any split, keeping its index
     def transform(self, X):
-        X = self.clip(engineer(self.zero_to_nan(X).fillna(self.fill)))
-        X = self.encode(X).reindex(columns=self.columns, fill_value=0)
-        return (X - self.center) / self.spread if self.scaler else X
+        X = self.clip(engineer(self.zero_to_nan(X).fillna(self.fill)).drop(columns=self.drop))
+        X = self.scale(self.encode(X).reindex(columns=self.columns, fill_value=0))
+        return self.project(X) if self.pca else X
 
     def fit_transform(self, X):
         return self.fit(X).transform(X)
@@ -82,7 +85,26 @@ class Preprocessor:
     def encode(self, X):
         X = X.copy()
         for c, order in self.ordinal.items():
-            X[c] = X[c].map({v: i for i, v in enumerate(order)}).fillna(-1)
+            if c in X:
+                X[c] = X[c].map({v: i for i, v in enumerate(order)}).fillna(-1)
         for c, cats in self.onehot.items():
             X[c] = pd.Categorical(X[c], categories=cats)
         return pd.get_dummies(X, columns=list(self.onehot), dtype=float)
+
+    def scale(self, X):
+        return (X - self.center) / self.spread if self.scaler else X
+
+    # Eigen-decomposes the covariance matrix, keeping pca components (int) or pca variance ratio (float < 1)
+    def fit_pca(self, X):
+        self.pca_mean = X.mean(axis=0)
+        eigvals, eigvecs = np.linalg.eigh(np.cov(X - self.pca_mean, rowvar=False))
+        order = np.argsort(eigvals)[::-1]
+        eigvals, eigvecs = eigvals[order], eigvecs[:, order]
+        self.explained_variance_ratio = eigvals / eigvals.sum()
+        k = int(np.searchsorted(np.cumsum(self.explained_variance_ratio), self.pca) + 1) if self.pca < 1 else int(self.pca)
+        self.components = eigvecs[:, :k]
+
+    # Projects X onto the principal components
+    def project(self, X):
+        Z = (X.to_numpy(dtype=float) - self.pca_mean) @ self.components
+        return pd.DataFrame(Z, index=X.index, columns=[f"PC{i + 1}" for i in range(Z.shape[1])])
