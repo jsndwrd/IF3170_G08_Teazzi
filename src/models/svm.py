@@ -3,7 +3,7 @@ import numpy as np
 from .base import BaseModel
 
 class SVM(BaseModel):
-    # C bounds every alpha (0 <= alpha <= C), kernel is 'linear' | 'poly' | 'rbf' | 'sigmoid'
+    # C bounds every alpha (0 <= alpha <= C), kernel is 'linear' | 'poly' | 'rbf' or 'gaussian' (same kernel) | 'sigmoid'
     def __init__(self, C=1.0, kernel="linear", gamma=0.1, degree=3, coef0=1.0, tol=1e-3, max_iter=100000):
         self.C, self.kernel, self.gamma, self.degree, self.coef0 = C, kernel, gamma, degree, coef0
         self.tol, self.max_iter = tol, max_iter
@@ -14,16 +14,16 @@ class SVM(BaseModel):
             return A @ B.T
         if self.kernel == "poly":
             return (self.gamma * A @ B.T + self.coef0) ** self.degree
-        if self.kernel == "rbf":
+        if self.kernel in ("rbf", "gaussian"):
             sq = (A ** 2).sum(axis=1)[:, None] + (B ** 2).sum(axis=1)[None, :] - 2 * A @ B.T
             return np.exp(-self.gamma * np.maximum(sq, 0))
         if self.kernel == "sigmoid":
             return np.tanh(self.gamma * A @ B.T + self.coef0)
         raise ValueError(f"unknown kernel {self.kernel}")
 
-    # K(x_k, x) for every row x of X, reusing the precomputed squared norms sq for the RBF kernel
+    # K(x_k, x) for every row x of X, reusing the precomputed squared norms sq for the Gaussian kernel
     def kernel_row(self, X, sq, k):
-        if self.kernel == "rbf":
+        if self.kernel in ("rbf", "gaussian"):
             return np.exp(-self.gamma * np.maximum(sq + sq[k] - 2 * (X @ X[k]), 0))
         return self.kernel_matrix(X, X[[k]])[:, 0]
 
