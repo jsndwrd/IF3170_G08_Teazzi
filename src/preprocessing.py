@@ -2,7 +2,7 @@ from copy import deepcopy
 
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import StratifiedKFold, train_test_split
 
 from config import Settings
 
@@ -22,24 +22,34 @@ def drop_duplicates(X, y):
     return X[keep], y[keep]
 
 
+def arrival_date(df):
+    first = pd.to_datetime(dict(year=df["arrival_year"], month=df["arrival_month"], day=1))
+    return first + pd.to_timedelta(np.minimum(df["arrival_day"], first.dt.days_in_month) - 1, unit="D")
+
+
 # Adds derived features using only values from the same row
 def engineer(df):
     df = df.copy()
     df["total_nights"] = df["weekend_nights"] + df["weekday_nights"]
     df["total_guests"] = df["num_adults"] + df["num_children"]
+    day_of_year = arrival_date(df).dt.dayofyear
+    df["month_sin"], df["month_cos"] = np.sin(2 * np.pi * df["arrival_month"] / 12), np.cos(2 * np.pi * df["arrival_month"] / 12)
+    df["doy_sin"], df["doy_cos"] = np.sin(2 * np.pi * day_of_year / 365.25), np.cos(2 * np.pi * day_of_year / 365.25)
+    df["lead_x_price"] = np.log1p(df["days_before_arrival"]) * df["nightly_rate_idr"] / 1e6
     return df
 
 
-# Impute, engineer, select, cap, encode, and scale with statistics fit on X_train only
+# Date stats, impute, engineer, select, cap, encode, and scale with statistics fit on X_train only
 class Preprocessor:
-    def __init__(self, zero_as_missing=(), num_strategy="median", drop=(), cap=(), cap_factor=1.5, ordinal=None, scaler="standard"):
+    def __init__(self, zero_as_missing=(), num_strategy="median", drop=(), cap=(), cap_factor=1.5, ordinal=None, scaler="standard", smoothing=20):
         self.zero_as_missing, self.num_strategy, self.drop = list(zero_as_missing), num_strategy, list(drop)
         self.cap, self.cap_factor = list(cap), cap_factor
-        self.ordinal, self.scaler = ordinal or {}, scaler
+        self.ordinal, self.scaler, self.smoothing = ordinal or {}, scaler, smoothing
 
-    # Learns fill values, IQR bounds, categories, and scaling stats from X
-    def fit(self, X):
-        X = self.zero_to_nan(X)
+    # Learns date stats, fill values, IQR bounds, categories, and scaling stats from X and y
+    def fit(self, X, y):
+        self.fit_dates(X, y)
+        X = self.zero_to_nan(self.add_dates(X, self.train_rate))
         num = X.select_dtypes("number").columns
         self.fill = {**getattr(X[num], self.num_strategy)().to_dict(), **X[X.columns.difference(num)].mode().iloc[0].to_dict()}
         X = engineer(X.fillna(self.fill)).drop(columns=self.drop)
@@ -63,12 +73,39 @@ class Preprocessor:
         return self
 
     # Applies the fitted steps to any split, keeping its index
-    def transform(self, X):
-        X = self.clip(engineer(self.zero_to_nan(X).fillna(self.fill)).drop(columns=self.drop))
+    def transform(self, X, date_rate=None):
+        X = self.zero_to_nan(self.add_dates(X, date_rate))
+        X = self.clip(engineer(X.fillna(self.fill)).drop(columns=self.drop))
         return self.scale(self.encode(X).reindex(columns=self.columns, fill_value=0))
 
-    def fit_transform(self, X):
-        return self.fit(X).transform(X)
+    def fit_transform(self, X, y):
+        return self.fit(X, y).transform(X, self.train_rate)
+
+    def fit_dates(self, X, y):
+        self.price_by = X.groupby(["room_category", "arrival_month"])["nightly_rate_idr"].median()
+        self.lead_by = X.groupby(["booking_channel", "arrival_month"])["days_before_arrival"].median()
+        date, self.prior = arrival_date(X), y.mean()
+        self.date_stats, self.date_count = self.rate_table(date, y), date.value_counts()
+        self.train_rate = np.zeros(len(X))
+        for tr, va in StratifiedKFold(5, shuffle=True, random_state=Settings.SEED).split(X, y):
+            self.train_rate[va] = self.date_rate(self.rate_table(date.iloc[tr], y.iloc[tr]), date.iloc[va])
+
+    def rate_table(self, date, y):
+        return pd.DataFrame({"date": date.values, "y": np.asarray(y)}).groupby("date")["y"].agg(["sum", "count"])
+
+    def date_rate(self, table, date):
+        s = table.reindex(date.values)
+        return ((s["sum"].fillna(0) + self.smoothing * self.prior) / (s["count"].fillna(0) + self.smoothing)).values
+
+    def add_dates(self, X, rate=None):
+        X = X.copy()
+        for col, by, table in (("nightly_rate_idr", ["room_category", "arrival_month"], self.price_by),
+                               ("days_before_arrival", ["booking_channel", "arrival_month"], self.lead_by)):
+            X[col] = X[col].fillna(pd.Series(table.reindex(pd.MultiIndex.from_frame(X[by])).values, index=X.index))
+        date = arrival_date(X)
+        X["date_rate"] = self.date_rate(self.date_stats, date) if rate is None else rate
+        X["date_count"] = np.log1p(date.map(self.date_count).fillna(0).values)
+        return X
 
     def zero_to_nan(self, X):
         X = X.copy()

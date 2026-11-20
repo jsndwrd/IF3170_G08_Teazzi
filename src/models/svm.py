@@ -21,11 +21,18 @@ class SVM(BaseModel):
             return np.tanh(self.gamma * A @ B.T + self.coef0)
         raise ValueError(f"unknown kernel {self.kernel}")
 
+    # K(x_k, x) for every row x of X, reusing the precomputed squared norms sq for the RBF kernel
+    def kernel_row(self, X, sq, k):
+        if self.kernel == "rbf":
+            return np.exp(-self.gamma * np.maximum(sq + sq[k] - 2 * (X @ X[k]), 0))
+        return self.kernel_matrix(X, X[[k]])[:, 0]
+
     def fit(self, X, y):
         X = np.asarray(X, dtype=float)
         y = np.where(np.asarray(y) == 1, 1.0, -1.0)
         alpha, u = np.zeros(len(y)), np.zeros(len(y))
         diag = np.concatenate([np.diag(self.kernel_matrix(part, part)) for part in np.array_split(X, len(X) // 500 + 1)])
+        sq = (X ** 2).sum(axis=1)
 
         for self.n_iter_ in range(self.max_iter):
             g = y - u
@@ -35,10 +42,10 @@ class SVM(BaseModel):
             if g[i] - np.where(low, g, np.inf).min() < self.tol:
                 break
 
-            Ki = self.kernel_matrix(X, X[[i]])[:, 0]
+            Ki = self.kernel_row(X, sq, i)
             gain = np.where(low & (g < g[i]), (g[i] - g) ** 2 / np.maximum(diag[i] + diag - 2 * Ki, 1e-12), -np.inf)
             j = gain.argmax()
-            Kj = self.kernel_matrix(X, X[[j]])[:, 0]
+            Kj = self.kernel_row(X, sq, j)
             eta = max(diag[i] + diag[j] - 2 * Ki[j], 1e-12)
             if y[i] != y[j]:
                 L, H = max(0, alpha[j] - alpha[i]), min(self.C, self.C + alpha[j] - alpha[i])
