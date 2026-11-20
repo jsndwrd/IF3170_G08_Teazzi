@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -28,14 +30,14 @@ def engineer(df):
     return df
 
 
-# Impute, engineer, select, cap, encode, scale, and PCA with statistics fit on X_train only
+# Impute, engineer, select, cap, encode, and scale with statistics fit on X_train only
 class Preprocessor:
-    def __init__(self, zero_as_missing=(), num_strategy="median", drop=(), cap=(), cap_factor=1.5, ordinal=None, scaler="standard", pca=None):
+    def __init__(self, zero_as_missing=(), num_strategy="median", drop=(), cap=(), cap_factor=1.5, ordinal=None, scaler="standard"):
         self.zero_as_missing, self.num_strategy, self.drop = list(zero_as_missing), num_strategy, list(drop)
         self.cap, self.cap_factor = list(cap), cap_factor
-        self.ordinal, self.scaler, self.pca = ordinal or {}, scaler, pca
+        self.ordinal, self.scaler = ordinal or {}, scaler
 
-    # Learns fill values, IQR bounds, categories, scaling stats, and PCA components from X
+    # Learns fill values, IQR bounds, categories, and scaling stats from X
     def fit(self, X):
         X = self.zero_to_nan(X)
         num = X.select_dtypes("number").columns
@@ -58,16 +60,12 @@ class Preprocessor:
                 "robust": lambda: (X.median(), X.quantile(0.75) - X.quantile(0.25)),
             }[self.scaler]()
             self.center, self.spread = center, spread.replace(0, 1)
-
-        if self.pca:
-            self.fit_pca(self.scale(X).to_numpy(dtype=float))
         return self
 
     # Applies the fitted steps to any split, keeping its index
     def transform(self, X):
         X = self.clip(engineer(self.zero_to_nan(X).fillna(self.fill)).drop(columns=self.drop))
-        X = self.scale(self.encode(X).reindex(columns=self.columns, fill_value=0))
-        return self.project(X) if self.pca else X
+        return self.scale(self.encode(X).reindex(columns=self.columns, fill_value=0))
 
     def fit_transform(self, X):
         return self.fit(X).transform(X)
@@ -94,17 +92,56 @@ class Preprocessor:
     def scale(self, X):
         return (X - self.center) / self.spread if self.scaler else X
 
-    # Eigen-decomposes the covariance matrix, keeping pca components (int) or pca variance ratio (float < 1)
-    def fit_pca(self, X):
-        self.pca_mean = X.mean(axis=0)
-        eigvals, eigvecs = np.linalg.eigh(np.cov(X - self.pca_mean, rowvar=False))
-        order = np.argsort(eigvals)[::-1]
-        eigvals, eigvecs = eigvals[order], eigvecs[:, order]
-        self.explained_variance_ratio = eigvals / eigvals.sum()
-        k = int(np.searchsorted(np.cumsum(self.explained_variance_ratio), self.pca) + 1) if self.pca < 1 else int(self.pca)
-        self.components = eigvecs[:, :k]
 
-    # Projects X onto the principal components
-    def project(self, X):
-        Z = (X.to_numpy(dtype=float) - self.pca_mean) @ self.components
-        return pd.DataFrame(Z, index=X.index, columns=[f"PC{i + 1}" for i in range(Z.shape[1])])
+# PCA from the eigenvectors of the covariance matrix
+class PCA:
+    def __init__(self, n):
+        self.n = n
+
+    def fit(self, X):
+        self.mean = X.mean(axis=0)
+        eigvals, eigvecs = np.linalg.eigh(np.cov(X - self.mean, rowvar=False))
+        order = np.argsort(eigvals)[::-1]
+        self.explained_variance_ratio = eigvals[order] / eigvals.sum()
+        k = int(np.searchsorted(np.cumsum(self.explained_variance_ratio), self.n) + 1) if self.n < 1 else int(self.n)
+        self.components = eigvecs[:, order[:k]]
+        return self
+
+    def transform(self, X):
+        return (X - self.mean) @ self.components
+
+
+class Pipeline:
+    # select keeps the top-k features ranked by the model itself, pca is passed to PCA
+    def __init__(self, model, select=None, pca=None):
+        self.model, self.select, self.pca = model, select, pca
+
+    def fit(self, X, y):
+        X = np.asarray(X, dtype=float)
+        self.keep = np.arange(X.shape[1])
+        if self.select:
+            self.keep = np.argsort(self.feature_scores(X, y))[::-1][:self.select]
+        self.reducer = PCA(self.pca).fit(X[:, self.keep]) if self.pca else None
+        self.model.fit(self.reduce(X), y)
+        return self
+
+    def predict(self, X):
+        return self.model.predict(self.reduce(X))
+
+    # Keeps the selected columns and applies PCA if enabled
+    def reduce(self, X):
+        X = np.asarray(X, dtype=float)[:, self.keep]
+        return self.reducer.transform(X) if self.reducer else X
+
+    def feature_scores(self, X, y):
+        fitted = deepcopy(self.model).fit(X, y)
+        scores = getattr(fitted, "feature_importances_", None)
+        return np.abs(np.ravel(fitted.coef_)) if scores is None else scores
+
+    def set_params(self, **params):
+        for key, value in params.items():
+            if key in ("select", "pca"):
+                setattr(self, key, value)
+            else:
+                self.model.set_params(**{key: value})
+        return self
