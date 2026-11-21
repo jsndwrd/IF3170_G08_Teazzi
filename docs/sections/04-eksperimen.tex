@@ -42,14 +42,15 @@ skor hanya dapat berasal dari implementasinya.
 		  & \texttt{DecisionTreeClassifier} & 0,8309 & 0,8201 & 0,0080 \\
 		\midrule
 		Bayes
-		  & \textit{from scratch} (BN) & - & - & - \\
+		  & \textit{from scratch} (NB) & 0,7108 & 0,7095 & 0,0077 \\
+		  & \textit{from scratch} (TAN) & \textbf{0,7633} & \textbf{0,7641} & 0,0043 \\
 		  & \texttt{GaussianNB} & 0,3734 & 0,3708 & 0,0058 \\
 		\bottomrule
 	\end{tabular}
 \end{table}
 
-\todo{Isi baris \textit{from scratch} KNN, Logistic Regression, DTL, dan Bayesian
-Network setelah implementasinya selesai (jalankan sel \textit{Model Comparison} di
+\todo{Isi baris \textit{from scratch} KNN, Logistic Regression, dan DTL setelah
+implementasinya selesai (jalankan sel \textit{Model Comparison} di
 \textit{notebook}).}
 
 \section{Hasil Support Vector Machine}
@@ -169,6 +170,140 @@ antar-\textit{fold} (0,0062). PCA mengurangi dimensi masukan sepertiga tanpa
 penurunan skor yang berarti, tetapi juga tidak menaikkan skor. Karena itu, model
 akhir tetap memakai tiga puluh fitur tanpa seleksi dan tanpa PCA.
 
+\section{Hasil Bayesian Network}
+\label{sec:hasil-bn}
+
+\subsection{TAN Dibandingkan \textit{Naive Bayes}}
+
+\textit{Naive Bayes} dan TAN memakai diskretisasi, CPT, dan 5 \textit{bin} yang
+sama. Satu-satunya perbedaan adalah struktur: TAN menambahkan satu
+\textit{parent} fitur per fitur (Subbab~\ref{sec:tan}). Pada Tabel~\ref{tab:perbandingan},
+TAN mencapai \textit{macro F1} 5-\textit{fold} 0,7641 ($\sigma=0{,}0043$)
+berbanding 0,7095 ($\sigma=0{,}0077$) untuk \textit{Naive Bayes}. Selisih 0,0546
+jauh lebih besar daripada simpangan baku antar-\textit{fold}. Pada \textit{hold-out},
+selisihnya 0,0525 (0,7633 berbanding 0,7108), sehingga arah dan besar selisihnya
+konsisten pada kedua cara evaluasi.
+
+Diskretisasi juga memperbaiki \textit{Naive Bayes} secara besar dibandingkan
+\texttt{GaussianNB} (0,7095 berbanding 0,3708) dengan asumsi kebebasan yang sama.
+Hasil ini sejalan dengan dugaan pada bab sebelumnya bahwa distribusi normal tidak
+cocok untuk fitur \textit{one-hot} dan fitur diskret pada data ini. Dugaan
+tersebut belum diuji secara langsung.
+
+\begin{table}[H]
+	\centering
+	\caption{\textit{Classification report} \textit{Naive Bayes} dan TAN pada \texttt{X\_val}}
+	\label{tab:report-bn}
+	\begin{tabular}{l l c c c}
+		\toprule
+		\textbf{Model} & \textbf{Kelas} & \textbf{\textit{Precision}} & \textbf{\textit{Recall}} & \textbf{F1} \\
+		\midrule
+		\textit{Naive Bayes} & 0 (tidak batal) & 0,8404 & 0,7408 & 0,7875 \\
+		                     & 1 (batal)       & 0,5722 & 0,7113 & 0,6342 \\
+		\midrule
+		TAN                  & 0 (tidak batal) & 0,8427 & 0,8498 & 0,8462 \\
+		                     & 1 (batal)       & 0,6863 & 0,6745 & 0,6803 \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+\textit{Naive Bayes} memprediksi 40,7\% baris \texttt{X\_val} sebagai batal,
+padahal proporsi pembatalan sebenarnya 32,8\%. Kelebihan prediksi batal ini
+terlihat pada \textit{precision} kelas batal yang rendah (0,5722) dan 954
+\textit{false positive}. TAN memprediksi 32,2\% baris sebagai batal, hampir sama
+dengan proporsi sebenarnya, dengan \textit{false positive} turun menjadi 553.
+Penyebab yang mungkin adalah informasi ganda dari fitur yang saling berkaitan
+pada \textit{Naive Bayes}. Penyebab ini sejalan dengan struktur TAN pada
+Subbab berikutnya, tetapi belum diuji dengan menghapus fitur yang berkaitan.
+
+\subsection{Struktur yang Dipelajari TAN}
+
+Dari 435 pasangan fitur yang mungkin, TAN memilih 29 edge. Edge dengan
+\textit{conditional mutual information} terbesar adalah pasangan fitur yang
+diturunkan dari fitur yang sama: \texttt{arrival\_month} $\to$ \texttt{month\_cos}
+(1,147), \texttt{month\_sin} $\to$ \texttt{doy\_sin} (1,122),
+\texttt{arrival\_month} $\to$ \texttt{month\_sin} (1,093), dan
+\texttt{month\_cos} $\to$ \texttt{doy\_cos} (0,865). Pasangan berikutnya juga
+bersifat turunan: \texttt{num\_adults} $\to$ \texttt{total\_guests} (0,611),
+\texttt{weekday\_nights} $\to$ \texttt{total\_nights} (0,494), dan
+\texttt{lead\_x\_price} $\to$ \texttt{days\_before\_arrival} (0,334). Ini adalah
+pasangan yang menyebabkan \textit{Naive Bayes} menghitung informasi yang sama
+berulang kali. Nilai terkecil di antara edge terpilih adalah 0,005, yaitu
+hubungan yang sangat lemah (Gambar~\ref{fig:graf-bn}).
+
+Harga dari struktur ini adalah ukuran tabel. Jumlah sel CPT (seluruh nilai
+probabilitas yang disimpan) naik dari 212 pada \textit{Naive Bayes} menjadi 854
+pada TAN. CPT terbesar berukuran
+$2\times5\times5=50$ sel (misalnya pada \texttt{days\_before\_arrival}).
+Tabel yang lebih besar membutuhkan data lebih banyak, tetapi dengan 21.857 baris
+latih ini belum menimbulkan masalah yang terlihat.
+
+\subsection{Pengaruh \texttt{n\_bins}}
+\label{sec:tuning-bn}
+
+Jumlah \textit{bin} dipilih dengan \textit{grid search} 5-\textit{fold}
+(Tabel~\ref{tab:tuning-bn}).
+
+\begin{table}[H]
+	\centering
+	\caption{Hasil \textit{tuning} \texttt{n\_bins} pada Bayesian Network}
+	\label{tab:tuning-bn}
+	\begin{tabular}{c c c c c}
+		\toprule
+		& \multicolumn{2}{c}{\textbf{\textit{Naive Bayes}}} & \multicolumn{2}{c}{\textbf{TAN}} \\
+		\cmidrule(lr){2-3}\cmidrule(lr){4-5}
+		\textbf{\texttt{n\_bins}} & \textbf{5-\textit{fold} $\mu$} & \textbf{5-\textit{fold} $\sigma$} & \textbf{5-\textit{fold} $\mu$} & \textbf{5-\textit{fold} $\sigma$} \\
+		\midrule
+		3  & \textbf{0,7133} & 0,0110 & 0,7379 & 0,0063 \\
+		5  & 0,7095 & 0,0077 & \textbf{0,7641} & 0,0043 \\
+		10 & 0,7062 & 0,0088 & 0,7538 & 0,0069 \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+Pada \textit{Naive Bayes}, ketiga nilai \texttt{n\_bins} praktis setara karena
+selisih terbesar (0,0071) lebih kecil daripada simpangan baku (0,008--0,011).
+Pada TAN, \texttt{n\_bins}=5 terbaik, sedangkan 3 \textit{bin} turun 0,0262 dan 10
+\textit{bin} turun 0,0103. Kemungkinan penyebabnya, 3 \textit{bin} terlalu kasar
+untuk menangkap hubungan antarfitur, sedangkan 10 \textit{bin} membuat CPT
+dua-\textit{parent} (kelas $\times$ nilai \textit{parent} $\times$ nilai fitur)
+terlalu besar sehingga tiap sel hanya berisi sedikit baris. Dugaan ini belum diuji.
+
+\subsection{Klasifikasi Sensitif-Biaya}
+
+Aturan keputusan dengan $C_{FP}=2$ dan $C_{FN}=1$ (Subbab~\ref{sec:biaya-bn}) dievaluasi pada
+\texttt{X\_val} dengan biaya total $2\cdot FP+FN$ (Tabel~\ref{tab:biaya-bn}).
+
+\begin{table}[H]
+	\centering
+	\caption{Pengaruh aturan keputusan sensitif-biaya pada \texttt{X\_val} (Batal = persentase baris yang diprediksi batal)}
+	\label{tab:biaya-bn}
+	\small
+	\begin{tabular}{l r r r c c}
+		\toprule
+		\textbf{Model} & \textbf{FP} & \textbf{FN} & \textbf{Biaya $2\,FP+FN$} & \textbf{\textit{Macro F1}} & \textbf{Batal (\%)} \\
+		\midrule
+		\textit{Naive Bayes}              & 954 & 518 & 2.426 & 0,7108 & 40,7 \\
+		\textit{Naive Bayes} + biaya      & 720 & 625 & 2.065 & 0,7249 & 34,5 \\
+		TAN                               & 553 & 584 & 1.690 & 0,7633 & 32,2 \\
+		TAN + biaya                       & 286 & 810 & 1.382 & 0,7517 & 23,2 \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+Aturan sensitif-biaya menurunkan biaya total pada kedua model: dari 2.426 ke 2.065
+(turun 14,9\%) pada \textit{Naive Bayes} dan dari 1.690 ke 1.382 (turun 18,2\%)
+pada TAN. \textit{False positive} turun tajam dan \textit{false negative} naik,
+sesuai dengan harga yang diasumsikan. \textit{Macro F1} tidak otomatis ikut naik:
+pada TAN justru turun (0,7633 menjadi 0,7517) karena \textit{macro F1} menganggap
+semua kesalahan sama berat, sedangkan yang dioptimalkan adalah biaya. Pada
+\textit{Naive Bayes} \textit{macro F1} naik sedikit (0,7108 menjadi 0,7249) karena
+model ini semula terlalu sering memprediksi batal. Pemilihan antara
+\textit{macro F1} dan biaya bergantung pada metrik yang dianggap utama. Metrik
+penilaian tugas ini adalah \textit{macro F1}, sehingga aturan sensitif-biaya
+dilaporkan sebagai bonus dan tidak dipakai pada perbandingan utama
+(Tabel~\ref{tab:perbandingan}).
+
 \section{\textit{Hyperparameter Tuning}}
 
 \textit{Tuning} dijalankan dengan fungsi \texttt{tune}, yaitu \textit{grid search}
@@ -208,9 +343,9 @@ dalam margin atau salah diklasifikasikan pada data latih. Jumlah ini mengindikas
 bahwa kedua kelas banyak beririsan pada ruang fitur.
 
 \todo{Tambahkan hasil \textit{tuning} KNN ($k\in\{5,15,31\}$), Logistic Regression
-($\texttt{lr}\in\{0{,}01;0{,}1\}$), DTL ($\texttt{max\_depth}\in\{5,8,\text{None}\}$),
-dan Bayesian Network ($\texttt{n\_bins}\in\{3,5,10\}$) serta tabel
-\texttt{ranking} semua model.}
+($\texttt{lr}\in\{0{,}01;0{,}1\}$), dan DTL ($\texttt{max\_depth}\in\{5,8,\text{None}\}$)
+serta tabel \texttt{ranking} semua model. \textit{Tuning} Bayesian Network ada pada
+Subbab~\ref{sec:tuning-bn}.}
 
 \section{Analisis Kesalahan}
 
