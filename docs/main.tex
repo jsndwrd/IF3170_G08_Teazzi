@@ -1,0 +1,199 @@
+\documentclass[12pt,a4paper]{report}
+
+% ---------- Paket dasar ----------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[indonesian]{babel}
+\addto\captionsindonesian{\renewcommand{\bibname}{Referensi}}
+
+% ---------- Paket matematika & gambar ----------
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{float}
+\bibliographystyle{IEEEtran}
+\makeatletter
+\def\bstctlcite{\@ifnextchar[{\@bstctlcite}{\@bstctlcite[@auxout]}}
+\def\@bstctlcite[#1]#2{\@bsphack\@for\@citeb:=#2\do{%
+  \edef\@citeb{\expandafter\@firstofone\@citeb}%
+  \if@filesw\immediate\write\csname #1\endcsname{\string\citation{\@citeb}}\fi}%
+  \@esphack}
+\makeatother
+
+% ---------- Paket lain ----------
+\usepackage[most]{tcolorbox}
+\usepackage{hyperref}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage[table]{xcolor}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{adjustbox}
+\emergencystretch=3em
+
+\setlength{\headheight}{10pt}
+\setlength{\headsep}{55pt}
+\setlength{\footskip}{28pt}
+\usepackage[a4paper,top=3cm,bottom=3cm,left=3cm,right=3cm]{geometry}
+
+% Gambar dari folder public dan dari folder output repository
+\graphicspath{{public/}{public/figures/}{../output/}}
+
+% ---------- Listing kode Python ----------
+\lstdefinestyle{py}{
+	language=Python,
+	basicstyle=\ttfamily\scriptsize,
+	keywordstyle=\color{blue!70!black}\bfseries,
+	commentstyle=\color{gray}\itshape,
+	stringstyle=\color{teal!70!black},
+	numbers=left,
+	numberstyle=\tiny\color{gray},
+	frame=single,
+	rulecolor=\color{gray!50},
+	breaklines=true,
+	showstringspaces=false,
+	tabsize=4,
+	columns=fullflexible,
+	keepspaces=true,
+	literate={α}{{$\alpha$}}1 {Σ}{{$\Sigma$}}1,
+}
+% Baris komentar Python tidak ditampilkan: dilewati lewat linerange pada setiap \lstinputlisting.
+% Jika kode di src/ berubah, sesuaikan nomor baris pada linerange.
+\lstset{style=py}
+\renewcommand{\lstlistingname}{Kode}
+
+% ---------- Penanda bagian yang belum selesai ----------
+% Hapus semua \todo{...} sebelum laporan dikumpulkan.
+\newtcolorbox{todobox}{colback=orange!8,colframe=orange!70!black,boxrule=0.6pt,arc=2pt,left=4pt,right=4pt,top=2pt,bottom=2pt,fontupper=\small}
+\newcommand{\todo}[1]{\begin{todobox}\textbf{TODO:} #1\end{todobox}}
+
+% --- Pengaturan header & footer ---
+\pagestyle{fancy}
+\fancyhf{}
+
+\fancypagestyle{plain}{%
+	\fancyhf{}%
+	\fancyhead[L]{%
+		\includegraphics[height=1.1cm]{logo-itb}\hspace{0.3cm}%
+		\includegraphics[height=1.1cm]{logo-stei}\hspace{0.3cm}%
+	}%
+	\fancyhead[R]{%
+		\begin{minipage}{9cm}
+			\raggedleft\bfseries IF3170 Inteligensi Artifisial\\
+			\normalsize Laporan Tugas Besar 2\\
+			\itshape Semester I 2026/2027
+		\end{minipage}
+	}%
+	\renewcommand{\headrulewidth}{0.4pt}%
+	\fancyfoot[L]{\small v1.0}%
+	\fancyfoot[C]{\small Halaman \thepage}%
+	\fancyfoot[R]{\small }%
+	\renewcommand{\footrulewidth}{0.4pt}%
+}
+
+\fancyhead[L]{%
+	\includegraphics[height=1.5cm]{logo-itb}\hspace{0.3cm}%
+	\includegraphics[height=1.5cm]{logo-stei}\hspace{0.3cm}%
+}
+
+\fancyhead[R]{%
+	\begin{minipage}{9cm}
+		\raggedleft\bfseries IF3170 Inteligensi Artifisial\\
+		\normalsize Laporan Tugas Besar 2\\
+		\itshape Semester I 2026/2027
+	\end{minipage}
+}
+
+\renewcommand{\headrulewidth}{0.4pt}
+\fancyfoot[L]{\small v1.0}
+\fancyfoot[C]{\small Halaman \thepage}
+\fancyfoot[R]{\small }
+\renewcommand{\footrulewidth}{0.4pt}
+
+\begin{document}
+\bstctlcite{IEEEexample:BSTcontrol}
+
+	% ================= Cover =================
+	\begin{titlepage}
+		\thispagestyle{empty}
+		\centering
+
+		{\LARGE \textbf{Tugas Besar 2}\par}
+		\vspace{0.2cm}
+		{\LARGE \textbf{Kelompok G08 - Teazzi}\par}
+		\vspace{0.8cm}
+		{\large IF3170 Inteligensi Artifisial\par}
+		\vspace{0.2cm}
+		{\large Klasifikasi Pembatalan Pemesanan Hotel\\dengan Algoritma \textit{Supervised Learning}\par}
+		\vspace{0.2cm}
+		{\large Semester I Tahun 2026/2027\par}
+
+		\vspace{1.0cm}
+		% Taruh foto kelompok di docs/public/foto-kelompok.png; jika tidak ada, logo ITB dipakai.
+		\IfFileExists{public/foto-kelompok.png}{%
+			\includegraphics[width=0.75\textwidth,height=7cm,keepaspectratio]{foto-kelompok}%
+		}{%
+			\includegraphics[height=4.5cm]{logo-itb}%
+		}\par
+
+		\vspace{0.8cm}
+		{\bfseries Disusun oleh:\par}
+		\vspace{0.2cm}
+		\textbf{Kelompok G08 - Teazzi}
+		\vspace{0.5cm} \\
+		\begin{tabular}{l l}
+			Jason Edward Salim & (13524034) \\
+			Stefani Angeline Oroh & (13524064) \\
+			Bryan Pratama Putra Hendra & (13524067) \\
+			Angelina Andra Alanna & (13524079) \\
+			Michael James Liman & (13524106) \\
+		\end{tabular}
+
+		\vfill
+		Laboratorium Artificial Intelligence\par
+		Program Studi Teknik Informatika\par
+		Sekolah Teknik Elektro dan Informatika\par
+		Institut Teknologi Bandung\par
+
+	\end{titlepage}
+
+	\clearpage
+	\pagestyle{fancy}
+
+	\tableofcontents
+	\clearpage
+	\listoftables
+	\clearpage
+	\listoffigures
+	\clearpage
+
+	\chapter{Deskripsi Persoalan}
+	\input{sections/01-deskripsi-persoalan}
+
+	\chapter{Pembahasan: Implementasi Algoritma}
+	\input{sections/02-implementasi}
+
+	\chapter{Pembahasan: \textit{Data Cleaning} dan \textit{Preprocessing}}
+	\input{sections/03-preprocessing}
+
+	\chapter{Pembahasan: Hasil dan Analisis Perbandingan}
+	\input{sections/04-eksperimen}
+
+	\chapter{Kesimpulan dan Saran}
+	\input{sections/05-penutup}
+
+	\chapter{Pembagian Tugas}
+	\input{sections/06-pembagian-tugas}
+
+	\bibliography{dafpus}
+
+	\appendix
+	\chapter{Lampiran}
+	\input{sections/07-lampiran}
+
+\end{document}

@@ -1,0 +1,192 @@
+Program ditulis dalam Python dan disimpan di folder \texttt{src/}. Model
+\textit{from scratch} hanya memakai NumPy~\cite{numpy2026docs}. Scikit-learn dipakai untuk pembagian
+data, perhitungan metrik, dan model pembanding~\cite{sklearn2026docs}. Alur
+kerja mengikuti tahapan CRISP-DM dan dijalankan dari \texttt{src/main.ipynb}.
+Potongan kode pada bab ini diambil langsung dari \textit{repository}.
+
+\section{Struktur Program}
+
+\begin{table}[H]
+	\centering
+	\caption{Modul program}
+	\label{tab:modul}
+	\begin{tabular}{l p{7.6cm}}
+		\toprule
+		\textbf{Modul} & \textbf{Isi} \\
+		\midrule
+		\texttt{config.py} & Konstanta global (\textit{seed}, \textit{path}, nama kolom, rasio pembagian data, jumlah \textit{fold}) \\
+		\texttt{eda.py} & Fungsi analisis eksploratif: tipe data, nilai hilang, duplikat, histogram, \textit{boxplot}, pencilan IQR, korelasi \\
+		\texttt{preprocessing.py} & Pembagian data, \texttt{Preprocessor}, rekayasa fitur, PCA, dan \texttt{Pipeline} (seleksi fitur, PCA, model) \\
+		\texttt{validation.py} & \textit{Hold-out}, \textit{k-fold}, \textit{tuning}, \textit{confusion matrix}, analisis kesalahan, \textit{resampling}, dan pembuatan berkas prediksi \\
+		\texttt{models/base.py} & Antarmuka \texttt{BaseModel}: \texttt{fit}, \texttt{predict}, \texttt{set\_params}, \texttt{save}, \texttt{load} \\
+		\texttt{models/knn.py} & K-Nearest Neighbors \\
+		\texttt{models/logistic\_regression.py} & Logistic Regression \\
+		\texttt{models/svm.py} & Support Vector Machine (SMO) \\
+		\texttt{models/dtl.py} & Decision Tree Learning \\
+		\texttt{models/bayes\_network.py} & Bayesian Network \\
+		\texttt{main.ipynb} & \textit{Notebook} utama yang menjalankan seluruh tahapan CRISP-DM \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+\section{Antarmuka Model}
+
+Semua model \textit{from scratch} merupakan turunan \texttt{BaseModel}.
+\texttt{fit(X, y)} menerima \textit{array} NumPy dan mengembalikan \texttt{self},
+sedangkan \texttt{predict(X)} mengembalikan label 0 atau 1. Antarmuka ini sama
+dengan antarmuka scikit-learn. Akibatnya, fungsi validasi, \textit{tuning}, dan
+\texttt{Pipeline} dapat dipakai, baik untuk model \textit{from scratch} maupun
+model pembanding, tanpa perubahan. Model yang sudah dilatih disimpan dan dimuat
+kembali dengan \texttt{pickle}.
+
+\lstinputlisting[caption={Antarmuka model (\texttt{src/models/base.py})},linerange={1-3,5-24}]{../src/models/base.py}
+
+\section{K-Nearest Neighbors}
+\label{sec:knn}
+
+\todo{Implementasi \texttt{KNN.fit} dan \texttt{KNN.predict} di
+\texttt{src/models/knn.py} belum selesai. Parameter yang sudah disiapkan:
+\texttt{k}, \texttt{metric} (\texttt{euclidean}, \texttt{manhattan},
+\texttt{minkowski}), dan \texttt{p}. Jelaskan cara kerja, fungsi/kelas, dan
+sertakan potongan kode setelah implementasi selesai.}
+
+\section{Logistic Regression}
+\label{sec:lr}
+
+\todo{Implementasi \texttt{LogisticRegression.fit} dan \texttt{predict} di
+\texttt{src/models/logistic\_regression.py} belum selesai. Parameter yang sudah
+disiapkan: \texttt{lr}, \texttt{n\_iter}, \texttt{reg} (L1/L2), dan \texttt{lam}.
+Jelaskan fungsi sigmoid, \textit{log-loss}, \textit{gradient descent}, dan
+regularisasi beserta potongan kode.}
+
+\section{Support Vector Machine}
+\label{sec:svm}
+
+\subsection{Formulasi}
+
+SVM dengan \textit{soft margin} mencari \textit{hyperplane} pemisah dengan margin
+terbesar dan mengizinkan sebagian sampel melanggar margin.
+Implementasi ini menyelesaikan bentuk dualnya. Untuk label $y_i\in\{-1,+1\}$ dan
+fungsi kernel $K$, masalah dualnya adalah
+\begin{equation}
+	\max_{\alpha}\ \sum_{i}\alpha_i-\frac{1}{2}\sum_{i}\sum_{j}\alpha_i\alpha_j y_i y_j K(x_i,x_j)
+	\quad\text{dengan}\quad 0\le\alpha_i\le C,\ \ \sum_i\alpha_i y_i=0 .
+\end{equation}
+Parameter $C$ menentukan besarnya hukuman untuk pelanggaran margin. Setelah
+$\alpha$ diperoleh, prediksi dihitung dari \textit{support vector}, yaitu sampel
+dengan $\alpha_i>0$:
+\begin{equation}
+	f(x)=\sum_{i\in SV}\alpha_i y_i K(x_i,x)+b,\qquad \hat{y}=\begin{cases}1 & f(x)\ge 0\\ 0 & f(x)<0\end{cases}
+\end{equation}
+Implementasi mendukung empat kernel (Tabel~\ref{tab:kernel}). Nama \texttt{rbf}
+dan \texttt{gaussian} merujuk ke kernel yang sama.
+
+\begin{table}[H]
+	\centering
+	\caption{Kernel SVM yang didukung}
+	\label{tab:kernel}
+	\begin{tabular}{l l}
+		\toprule
+		\textbf{Kernel} & $K(a,b)$ \\
+		\midrule
+		\texttt{linear} & $a^\top b$ \\
+		\texttt{poly} & $(\gamma\, a^\top b + c_0)^{d}$ \\
+		\texttt{rbf} / \texttt{gaussian} & $\exp(-\gamma\lVert a-b\rVert^2)$ \\
+		\texttt{sigmoid} & $\tanh(\gamma\, a^\top b + c_0)$ \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+\lstinputlisting[caption={Parameter dan fungsi kernel (\texttt{src/models/svm.py})},linerange={5-5,7-10,12-23,25-28}]{../src/models/svm.py}
+
+\subsection{Sequential Minimal Optimization}
+
+Masalah dual diselesaikan dengan \textit{Sequential Minimal Optimization}
+(SMO). Setiap iterasi SMO hanya mengubah dua variabel, yaitu
+$\alpha_i$ dan $\alpha_j$. Subproblem dua variabel ini dapat diselesaikan secara
+analitik tanpa melanggar $\sum_i\alpha_i y_i=0$. Pasangan $(i,j)$ dipilih dengan
+\textit{second-order working set selection} melalui langkah
+berikut.
+\begin{enumerate}
+	\item Untuk setiap sampel, simpan $u_k=\sum_l\alpha_l y_l K(x_l,x_k)$ dan
+	$g_k=y_k-u_k$. Himpunan $I_{\text{up}}$ berisi sampel yang $\alpha$-nya masih
+	dapat bergerak searah $y_k$ positif. Himpunan $I_{\text{low}}$ berisi sampel
+	yang $\alpha$-nya dapat bergerak ke arah sebaliknya.
+	\item Pilih $i=\arg\max_{k\in I_{\text{up}}} g_k$, yaitu sampel yang paling
+	melanggar kondisi KKT.
+	\item Hentikan pelatihan jika $g_i-\min_{k\in I_{\text{low}}}g_k<\texttt{tol}$
+	karena kondisi KKT sudah terpenuhi.
+	\item Di antara sampel $I_{\text{low}}$ dengan $g_j<g_i$, pilih $j$ yang
+	memaksimalkan kenaikan objektif $(g_i-g_j)^2/(K_{ii}+K_{jj}-2K_{ij})$.
+	\item Perbarui $\alpha_j$ dengan langkah Newton
+	$\alpha_j+y_j(g_j-g_i)/\eta$, dengan $\eta=K_{ii}+K_{jj}-2K_{ij}$, lalu potong
+	hasilnya ke batas $[L,H]$ agar $0\le\alpha\le C$. Sesuaikan $\alpha_i$ agar
+	$\sum\alpha y$ tidak berubah.
+	\item Perbarui $u$ secara inkremental dengan baris kernel ke-$i$ dan ke-$j$.
+\end{enumerate}
+Setiap iterasi hanya menghitung dua baris kernel, sedangkan matriks kernel penuh
+berukuran $n\times n$ tidak pernah disimpan. Untuk 21.857 baris data latih, matriks
+penuh dalam \textit{float64} membutuhkan sekitar 3,8 GB memori. Untuk kernel
+Gaussian, norma kuadrat setiap baris (\texttt{sq}) dihitung sekali di awal
+sehingga satu baris kernel cukup dihitung dengan satu perkalian matriks-vektor.
+Fungsi \texttt{snap} membulatkan nilai $\alpha$ yang sangat dekat dengan 0 atau
+$C$ agar status \textit{bound} tidak berganti-ganti akibat galat
+\textit{floating point}.
+
+Setelah konvergen, bias $b$ dihitung sebagai rata-rata $g_k$ pada \textit{free
+support vector} ($0<\alpha_k<C$) karena sampel tersebut terletak tepat di margin.
+Untuk kernel linear, bobot $w=\sum_i\alpha_i y_i x_i$ disimpan di
+\texttt{coef\_}. Prediksi kernel linear cukup dihitung sebagai $Xw+b$, dan nilai
+$|w|$ dipakai untuk seleksi fitur (Subbab~\ref{sec:seleksi}).
+
+\lstinputlisting[caption={Pelatihan SVM dengan SMO (\texttt{src/models/svm.py})},linerange={30-72}]{../src/models/svm.py}
+
+\lstinputlisting[caption={Fungsi keputusan dan prediksi SVM (\texttt{src/models/svm.py})},linerange={75-83}]{../src/models/svm.py}
+
+\section{Decision Tree Learning}
+\label{sec:dtl}
+
+\todo{Implementasi \texttt{DTL.fit} dan \texttt{DTL.predict} di
+\texttt{src/models/dtl.py} belum selesai. Parameter yang sudah disiapkan:
+\texttt{criterion} (\texttt{entropy}/\texttt{gini}), \texttt{max\_depth}, dan
+\texttt{min\_samples\_split}. Jelaskan perhitungan \textit{information gain},
+penanganan atribut kontinu, kriteria berhenti, dan potongan kode. Jika DTL
+menyediakan \texttt{feature\_importances\_}, \texttt{Pipeline} otomatis dapat
+memakainya untuk seleksi fitur.}
+
+\section{Bayesian Network}
+\label{sec:bn}
+
+\todo{Implementasi \texttt{BayesNetwork.fit} dan \texttt{predict} di
+\texttt{src/models/bayes\_network.py} belum selesai. Parameter yang sudah
+disiapkan: \texttt{n\_bins} untuk diskretisasi fitur kontinu. Jelaskan cara
+membangun struktur jaringan, estimasi \textit{conditional probability table}
+(beserta \textit{smoothing}), dan inferensi posterior.}
+
+\section{Validasi dan Utilitas Eksperimen}
+
+Seluruh evaluasi dijalankan melalui fungsi di \texttt{src/validation.py} agar
+semua model diuji dengan prosedur yang sama. Fungsi yang tersedia adalah sebagai
+berikut.
+\begin{itemize}
+	\item \texttt{holdout} melatih model pada \texttt{X\_train} dan mengevaluasinya
+	pada \texttt{X\_val}.
+	\item \texttt{kfold} menjalankan \textit{stratified 5-fold cross validation}
+	pada \texttt{X\_train} serta melaporkan rata-rata dan simpangan baku
+	\textit{macro F1}.
+	\item \texttt{tune} menjalankan \textit{grid search} dengan skor
+	\textit{k-fold}, lalu \texttt{best} mengambil parameter terbaik.
+	\item \texttt{resample} menerapkan SMOTE atau
+	\textit{random undersampling} hanya pada data latih di setiap \textit{fold}.
+	Data validasi tidak pernah berisi sampel sintetis.
+	\item \texttt{confusion}, \texttt{report}, \texttt{misclassified}, dan
+	\texttt{importance} dipakai untuk analisis kesalahan.
+	\item \texttt{submit} melatih ulang model pada seluruh data berlabel, menulis
+	prediksi ke \texttt{output/<model>\_<timestamp>.csv}, dan menyimpan model ke
+	berkas \texttt{.pkl}.
+\end{itemize}
+Setiap model di-\texttt{deepcopy} sebelum dilatih sehingga objek model di
+\textit{notebook} tidak berubah setelah validasi. Model yang belum
+diimplementasikan (\texttt{NotImplementedError}) dilewati secara otomatis.
+
+\lstinputlisting[caption={\textit{Hold-out} dan \textit{k-fold} (\texttt{src/validation.py})},linerange={13-58}]{../src/validation.py}

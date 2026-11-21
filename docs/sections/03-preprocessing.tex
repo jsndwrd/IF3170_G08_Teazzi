@@ -1,0 +1,200 @@
+Seluruh tahap \textit{cleaning} dan \textit{preprocessing} berada di
+\texttt{src/preprocessing.py}. Untuk mencegah \textit{data leakage}, data dibagi
+terlebih dahulu. Setelah itu, setiap statistik (nilai imputasi, batas pencilan,
+daftar kategori, rata-rata, dan simpangan baku) dihitung hanya dari
+\texttt{X\_train}, lalu diterapkan apa adanya ke \texttt{X\_val} dan
+\texttt{X\_test}.
+
+\section{Pembagian Data}
+
+Fungsi \texttt{split} membagi data latih menjadi 80\% \texttt{X\_train} dan 20\%
+\texttt{X\_val} secara \textit{stratified} dengan \textit{seed} 42 sehingga
+proporsi kelas batal pada kedua bagian sama. \texttt{X\_val} dipakai untuk
+evaluasi \textit{hold-out}, sedangkan \textit{k-fold} dijalankan di dalam
+\texttt{X\_train}.
+
+\section{\textit{Data Cleaning}}
+
+\subsection{Duplikat}
+
+Baris dengan seluruh fitur identik dihapus dari \texttt{X\_train} melalui
+\texttt{drop\_duplicates}. Duplikat membuat sampel tertentu berbobot ganda. Jika
+satu salinan masuk ke \textit{fold} latih dan salinan lain masuk ke \textit{fold}
+validasi, skor validasi juga menjadi terlalu tinggi. Duplikat pada \texttt{X\_val}
+dan \texttt{X\_test} tidak dihapus karena setiap baris pada kedua data itu tetap
+harus diprediksi.
+
+\subsection{Nilai Hilang}
+
+Imputasi dilakukan dalam dua tahap. Pada tahap pertama, \texttt{nightly\_rate\_idr}
+diisi dengan median harga per pasangan (\texttt{room\_category},
+\texttt{arrival\_month}), dan \texttt{days\_before\_arrival} diisi dengan median
+per pasangan (\texttt{booking\_channel}, \texttt{arrival\_month}). Harga kamar
+bergantung pada tipe kamar dan musim, sedangkan \textit{lead time} bergantung pada
+kanal pemesanan. Karena itu, median kelompok diharapkan lebih mendekati nilai
+sebenarnya daripada median global. Kedua fitur ini juga merupakan fitur dengan korelasi
+terbesar terhadap target.
+
+Pada tahap kedua, nilai yang masih hilang diisi dengan median untuk fitur numerik
+dan modus untuk fitur kategorikal. Median dipilih karena tidak terpengaruh
+pencilan dan distribusi fitur yang menceng.
+
+Parameter \texttt{zero\_as\_missing} disediakan untuk memperlakukan nilai 0 sebagai
+nilai hilang, misalnya harga kamar Rp0. Data latih memuat 413 baris (1,5\%)
+dengan \texttt{nightly\_rate\_idr} bernilai Rp0, dan data uji memuat 85 baris.
+Harga terendah berikutnya adalah Rp16.000 sehingga Rp0 terpisah jelas dari harga
+lainnya. Sebanyak 267 baris Rp0 berasal dari kanal Complimentary, sedangkan 146
+baris lainnya berasal dari Online Travel Agent. Dari 301 pemesanan Complimentary,
+267 pemesanan berharga Rp0. Rasio pembatalan baris Rp0 hanya 0,7\%, jauh di bawah
+rasio pembatalan baris lain (33,4\%).
+
+Pola ini menunjukkan bahwa Rp0 kemungkinan besar menandai kamar gratis, bukan
+harga yang tidak tercatat. Jika Rp0 diganti dengan median, informasi tersebut
+hilang. SVM RBF ($C=3$, $\gamma=0{,}1$) dengan kedua pilihan menghasilkan skor
+yang setara: \textit{macro F1} \textit{hold-out} 0,8384 dan rata-rata 5-\textit{fold}
+0,8328 jika Rp0 dipertahankan, serta 0,8376 dan 0,8329 jika Rp0 dianggap nilai
+hilang. Selisih keduanya jauh lebih kecil daripada simpangan baku antar-\textit{fold}
+(0,006). Karena skornya setara dan Rp0 memiliki makna yang jelas, konfigurasi
+akhir mempertahankan Rp0 sebagai nilai asli (\texttt{zero\_as\_missing} kosong).
+
+\subsection{Pencilan}
+
+Nilai \texttt{days\_before\_arrival} dan \texttt{nightly\_rate\_idr} dibatasi
+(\textit{capping}) ke rentang IQR
+$[Q_1-1{,}5\,\text{IQR},\ Q_3+1{,}5\,\text{IQR}]$ yang dihitung dari
+\texttt{X\_train}. Baris dengan nilai ekstrem tidak dibuang karena baris tersebut
+tetap valid dan harus diprediksi. Pembatasan ini mencegah nilai ekstrem
+mendominasi jarak pada KNN dan SVM RBF serta \textit{gradient} pada Logistic
+Regression.
+
+\section{Rekayasa Fitur}
+
+Fungsi \texttt{engineer} membuat fitur baru hanya dari nilai pada baris yang sama.
+Karena tidak memakai statistik dari baris lain, fungsi ini aman diterapkan ke data
+mana pun.
+
+\begin{table}[H]
+	\centering
+	\caption{Fitur hasil rekayasa}
+	\label{tab:fitur-baru}
+	\small
+	\begin{tabular}{l p{8.3cm}}
+		\toprule
+		\textbf{Fitur} & \textbf{Definisi dan alasan} \\
+		\midrule
+		\texttt{total\_nights} & \texttt{weekend\_nights} + \texttt{weekday\_nights}; lama menginap total \\
+		\texttt{total\_guests} & \texttt{num\_adults} + \texttt{num\_children}; jumlah tamu dalam satu pemesanan \\
+		\texttt{month\_sin}, \texttt{month\_cos} & \textit{Encoding} siklik bulan kedatangan agar Desember dan Januari berdekatan \\
+		\texttt{doy\_sin}, \texttt{doy\_cos} & \textit{Encoding} siklik urutan hari dalam tahun; tanggal yang tidak valid (misalnya 31 Februari) diganti dengan tanggal terakhir pada bulan itu \\
+		\texttt{lead\_x\_price} & $\log(1+\texttt{days\_before\_arrival})\times\texttt{nightly\_rate\_idr}/10^6$; interaksi antara dua fitur dengan korelasi terbesar terhadap target \\
+		\texttt{date\_rate} & Rasio pembatalan per tanggal kedatangan (\textit{target encoding}, lihat penjelasan di bawah) \\
+		\texttt{date\_count} & $\log(1+n_d)$, dengan $n_d$ jumlah pemesanan pada tanggal kedatangan yang sama; perkiraan tingkat keramaian \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+Fitur \texttt{date\_rate} merupakan \textit{target encoding} tanggal kedatangan
+dengan \textit{smoothing}:
+\begin{equation}
+	\texttt{date\_rate}(d)=\frac{\sum_{k:\,\text{tanggal}_k=d}y_k+m\,\bar{y}}{n_d+m},
+\end{equation}
+dengan $n_d$ jumlah pemesanan pada tanggal $d$, $\bar{y}$ rasio pembatalan global,
+dan $m=20$. \textit{Smoothing} menarik nilai tanggal yang jarang muncul ke arah
+rata-rata global. Fitur ini dihitung dari label sehingga nilainya pada
+\texttt{X\_train} dihitung secara \textit{out-of-fold}. \texttt{X\_train} dibagi
+menjadi lima \textit{fold}, dan setiap baris mendapat nilai dari tabel yang
+dihitung tanpa \textit{fold}-nya sendiri. \texttt{X\_val} dan \texttt{X\_test}
+memakai tabel dari seluruh \texttt{X\_train}. Tanpa langkah ini, label setiap
+baris ikut masuk ke fiturnya sendiri dan skor validasi menjadi bias.
+
+\lstinputlisting[caption={Rekayasa fitur (\texttt{src/preprocessing.py})},linerange={25-29,31-39}]{../src/preprocessing.py}
+\lstinputlisting[caption={\textit{Target encoding} tanggal secara \textit{out-of-fold} (\texttt{src/preprocessing.py})},linerange={84-108}]{../src/preprocessing.py}
+
+\section{\textit{Encoding} dan \textit{Scaling}}
+
+Atribut \texttt{meal\_package} (Room Only $<$ Breakfast $<$ Half Board $<$ Full
+Board) dan \texttt{room\_category} (Type A $<$ \dots{} $<$ Type G) diubah dengan
+\textit{ordinal encoding} karena kedua atribut memiliki urutan tingkat layanan.
+Atribut \texttt{booking\_channel} tidak memiliki urutan sehingga diubah dengan
+\textit{one-hot encoding}. Daftar kategorinya dipelajari dari \texttt{X\_train}.
+Kolom \texttt{X\_val} dan \texttt{X\_test} kemudian disamakan dengan
+\texttt{reindex}, dan kategori yang tidak muncul di \texttt{X\_train} menjadi
+vektor nol.
+
+Setelah \textit{encoding}, semua kolom distandardisasi menjadi $(x-\mu)/\sigma$
+dengan $\mu$ dan $\sigma$ dari \texttt{X\_train}. KNN dan SVM RBF memakai jarak
+Euclidean, sedangkan Logistic Regression dilatih dengan \textit{gradient descent}.
+Tanpa standardisasi, harga kamar yang bernilai jutaan akan mengalahkan fitur yang
+bernilai satuan. \texttt{Preprocessor} juga menyediakan opsi \texttt{minmax} dan
+\texttt{robust}.
+
+\lstinputlisting[caption={\texttt{Preprocessor.fit} dan \texttt{transform} (\texttt{src/preprocessing.py})},linerange={43-48,50-74,76-82}]{../src/preprocessing.py}
+
+\section{Seleksi Fitur dan Reduksi Dimensi}
+\label{sec:seleksi}
+
+Kelas \texttt{Pipeline(model, select=k, pca=n)} menambahkan seleksi fitur dan PCA
+untuk setiap model. \texttt{Pipeline} di-\textit{fit} ulang pada setiap
+\textit{fold} sehingga seleksi fitur dan PCA tidak melihat data validasi.
+
+Seleksi fitur dilakukan dengan bantuan model itu sendiri. Model dilatih sekali
+dengan seluruh fitur, lalu fitur diurutkan berdasarkan
+\texttt{feature\_importances\_} atau $|\texttt{coef\_}|$. Model kemudian dilatih
+ulang dengan $k$ fitur teratas. Untuk SVM, urutan fitur diambil dari $|w|$ SVM
+linear ($w=\sum\alpha_i y_i x_i$) karena SVM RBF tidak memiliki bobot eksplisit.
+
+PCA dihitung dari \textit{eigenvector} matriks kovarians. Jika $n<1$, jumlah
+komponen dipilih sampai proporsi variansi kumulatif mencapai $n$. Jika $n\ge1$,
+PCA memakai tepat $n$ komponen.
+
+\lstinputlisting[caption={PCA dan \texttt{Pipeline} (\texttt{src/preprocessing.py})},linerange={134-151,153-167,169-176}]{../src/preprocessing.py}
+
+\section{Penanganan Ketidakseimbangan Kelas}
+
+Variabel \texttt{METHOD} di \textit{notebook} menentukan penanganan
+ketidakseimbangan kelas, yaitu \texttt{None}, \texttt{'smote'}, atau
+\texttt{'undersample'}. \textit{Resampling} dijalankan di dalam \texttt{fit}
+setelah \textit{preprocessing} dan hanya diterapkan pada data latih sehingga
+distribusi kelas pada data validasi tidak berubah. SMOTE menambah sampel sintetis
+kelas batal dengan interpolasi antara sampel kelas batal dan tetangga terdekatnya,
+sedangkan \textit{random undersampling} membuang sebagian sampel kelas tidak batal
+secara acak. Keduanya membuat proporsi kelas pada data latih menjadi 50:50.
+
+Ketiga pilihan dibandingkan dengan SVM RBF ($C=3$, $\gamma=0{,}1$) memakai
+prosedur evaluasi pada Bab~4 (Tabel~\ref{tab:imbalance}). Kolom
+\textit{precision} dan \textit{recall} mengacu pada kelas batal di
+\texttt{X\_val}.
+
+\begin{table}[H]
+	\centering
+	\caption{Pengaruh penanganan ketidakseimbangan kelas pada SVM RBF}
+	\label{tab:imbalance}
+	\small
+	\setlength{\tabcolsep}{4pt}
+	\begin{tabular}{l r c c c c c}
+		\toprule
+		\texttt{METHOD} & \textbf{Data latih} & \textbf{\textit{Hold-out}} & \textbf{5-\textit{fold} $\mu$} & \textbf{5-\textit{fold} $\sigma$} & \textbf{\textit{Precision}} & \textbf{\textit{Recall}} \\
+		\midrule
+		\texttt{None}          & 21.857 & \textbf{0,8384} & \textbf{0,8328} & 0,0062 & 0,8090 & 0,7508 \\
+		\texttt{'smote'}       & 29.392 & 0,8305 & 0,8258 & 0,0020 & 0,7421 & 0,8166 \\
+		\texttt{'undersample'} & 14.322 & 0,8243 & 0,8173 & 0,0036 & 0,7120 & 0,8501 \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+Kedua metode \textit{resampling} menaikkan \textit{recall} kelas batal, dari
+75,1\% menjadi 81,7\% dengan SMOTE dan 85,0\% dengan \textit{undersampling}.
+Namun, \textit{precision} kelas batal turun lebih besar, dari 80,9\% menjadi
+74,2\% dan 71,2\%. Model yang dilatih dengan data 50:50 memprediksi lebih banyak
+pemesanan sebagai batal: 36,1\% baris \texttt{X\_val} dengan SMOTE dan 39,1\%
+dengan \textit{undersampling}, padahal proporsi pembatalan sebenarnya 32,8\%.
+Akibatnya, F1 kelas batal hampir tidak berubah (0,7788; 0,7776; dan 0,7749),
+sedangkan F1 kelas tidak batal turun dari 0,8979 menjadi 0,8833 dan 0,8737.
+\textit{Macro F1} tanpa \textit{resampling} paling tinggi, baik pada
+\textit{hold-out} maupun pada 5-\textit{fold}.
+
+Karena itu, konfigurasi akhir memakai \texttt{METHOD = None}. Dengan perbandingan
+kelas sekitar 2:1, SVM tanpa \textit{resampling} sudah mendeteksi 75\%
+pembatalan. \textit{Resampling} menggeser model ke arah memprediksi batal lebih
+sering daripada proporsi sebenarnya. \textit{Undersampling} memang mempercepat pelatihan karena data latihnya
+paling sedikit, tetapi skornya paling rendah.

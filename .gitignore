@@ -1,2 +1,30 @@
 __pycache__/
 .ipynb_checkpoints/
+
+# LaTeX: in docs/, keep only the report sources, assets, and the compiled PDF
+docs/*
+!docs/main.tex
+!docs/main.pdf
+!docs/*.bib
+!docs/README.md
+!docs/public/
+!docs/sections/
+
+# LaTeX build files anywhere (aux files from \include, latexmk, synctex, etc.)
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.log
+*.lot
+*.nav
+*.out
+*.run.xml
+*.snm
+*.synctex.gz
+*.synctex(busy)
+*.toc
+*.xdv

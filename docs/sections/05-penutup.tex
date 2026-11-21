@@ -1,0 +1,27 @@
+\section{Kesimpulan}
+
+\begin{enumerate}
+	\item SVM \textit{soft margin} telah diimplementasikan \textit{from scratch}
+	dengan SMO dan \textit{second-order working set selection}. Implementasi ini
+	mendukung kernel linear, polinomial, RBF/Gaussian, dan sigmoid. Dengan
+	\textit{hyperparameter} yang sama, \textit{macro F1}-nya identik dengan
+	\texttt{sklearn.svm.SVC}, yaitu 0,8384 pada \textit{hold-out} dan 0,8328 pada
+	5-\textit{fold cross validation}.
+	\item Semua tahap \textit{preprocessing} di-\textit{fit} hanya pada data latih.
+	\textit{Target encoding} tanggal kedatangan dihitung secara
+	\textit{out-of-fold} agar label setiap baris tidak bocor ke fiturnya sendiri.
+\end{enumerate}
+
+\todo{Tambahkan kesimpulan untuk KNN, Logistic Regression, DTL, dan Bayesian
+Network, serta model terbaik secara keseluruhan setelah \textit{tuning}.}
+
+\section{Saran}
+
+\begin{enumerate}
+	\item \textit{Recall} kelas batal (75\%) lebih rendah daripada
+	\textit{precision}-nya (81\%). Ambang \texttt{decision\_function} dapat digeser
+	dari 0, atau nilai $C$ dapat dibedakan per kelas. Kedua cara ini perlu diuji
+	untuk melihat apakah \textit{macro F1} naik.
+\end{enumerate}
+
+\todo{Tambahkan saran dari hasil algoritma lain.}

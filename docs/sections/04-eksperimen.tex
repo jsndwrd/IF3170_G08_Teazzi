@@ -1,0 +1,283 @@
+\section{Metodologi Eksperimen}
+
+Setiap model dievaluasi dengan \textit{macro F1-score} melalui dua cara berikut.
+\begin{enumerate}
+	\item \textit{Hold-out}: model dilatih pada \texttt{X\_train} (21.857 baris
+	setelah duplikat dihapus) dan diuji pada \texttt{X\_val} (5.475 baris).
+	\item \textit{Stratified 5-fold cross validation}: model dievaluasi pada
+	\texttt{X\_train}, lalu rata-rata dan simpangan baku kelima \textit{fold}
+	dilaporkan.
+\end{enumerate}
+Semua model menerima tiga puluh fitur hasil \textit{preprocessing} pada Bab~3
+dengan \textit{seed} 42. Setiap model \textit{from scratch} dibandingkan dengan
+model scikit-learn yang setara~\cite{sklearn2026docs}. Untuk SVM, pembanding
+\texttt{SVC} memakai \textit{hyperparameter} yang sama persis sehingga perbedaan
+skor hanya dapat berasal dari implementasinya.
+
+\section{Perbandingan dengan Pustaka}
+
+\begin{table}[H]
+	\centering
+	\caption{\textit{Macro F1} model \textit{from scratch} dan scikit-learn}
+	\label{tab:perbandingan}
+	\small
+	\begin{tabular}{p{3.3cm} l c c c}
+		\toprule
+		\textbf{Algoritma} & \textbf{Implementasi} & \textbf{\textit{Hold-out}} & \textbf{5-\textit{fold} $\mu$} & \textbf{5-\textit{fold} $\sigma$} \\
+		\midrule
+		SVM (RBF, $C=3$, $\gamma=0{,}1$)
+		  & \textit{from scratch} & 0,8384 & 0,8328 & 0,0062 \\
+		  & \texttt{SVC} & 0,8384 & 0,8328 & 0,0061 \\
+		\midrule
+		KNN ($k=5$)
+		  & \textit{from scratch} & - & - & - \\
+		  & \texttt{KNeighborsClassifier} & 0,8152 & 0,8069 & 0,0052 \\
+		\midrule
+		Logistic Regression
+		  & \textit{from scratch} & - & - & - \\
+		  & \texttt{LogisticRegression} & 0,7713 & 0,7656 & 0,0084 \\
+		\midrule
+		DTL (\texttt{max\_depth} $=8$)
+		  & \textit{from scratch} & - & - & - \\
+		  & \texttt{DecisionTreeClassifier} & 0,8309 & 0,8201 & 0,0080 \\
+		\midrule
+		Bayes
+		  & \textit{from scratch} (BN) & - & - & - \\
+		  & \texttt{GaussianNB} & 0,3734 & 0,3708 & 0,0058 \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+\todo{Isi baris \textit{from scratch} KNN, Logistic Regression, DTL, dan Bayesian
+Network setelah implementasinya selesai (jalankan sel \textit{Model Comparison} di
+\textit{notebook}).}
+
+\section{Hasil Support Vector Machine}
+
+\subsection{Kebenaran Implementasi}
+
+SVM \textit{from scratch} dan \texttt{SVC} menghasilkan \textit{macro F1} yang sama
+hingga empat angka desimal, baik pada \textit{hold-out} (0,8384) maupun pada
+rata-rata 5-\textit{fold} (0,8328). Prediksi keduanya pada \texttt{X\_val} juga
+menghasilkan \textit{confusion matrix} dan \textit{classification report} yang sama
+(Gambar~\ref{fig:cm-svm} dan Tabel~\ref{tab:report-svm}). \texttt{SVC} dibangun di
+atas LIBSVM, yang juga menyelesaikan masalah dual dengan SMO dan
+\textit{second-order working set selection}. Dengan toleransi KKT
+$10^{-3}$ pada keduanya, kedua implementasi menghasilkan pemisah yang memberikan
+prediksi identik pada data validasi.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.85\textwidth]{confusion_svm}
+	\caption{\textit{Confusion matrix} SVM \textit{from scratch} (kiri) dan \texttt{SVC} (kanan) pada \texttt{X\_val}}
+	\label{fig:cm-svm}
+\end{figure}
+
+\begin{table}[H]
+	\centering
+	\caption{\textit{Classification report} SVM pada \texttt{X\_val} (sama untuk \textit{from scratch} dan \texttt{SVC})}
+	\label{tab:report-svm}
+	\begin{tabular}{l c c c r}
+		\toprule
+		\textbf{Kelas} & \textbf{\textit{Precision}} & \textbf{\textit{Recall}} & \textbf{F1} & \textbf{\textit{Support}} \\
+		\midrule
+		0 (tidak batal) & 0,8827 & 0,9136 & 0,8979 & 3.681 \\
+		1 (batal)       & 0,8090 & 0,7508 & 0,7788 & 1.794 \\
+		\midrule
+		\textit{Accuracy}     & \multicolumn{3}{c}{0,8603} & 5.475 \\
+		\textit{Macro avg}    & 0,8458 & 0,8322 & 0,8384 & 5.475 \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+\subsection{Analisis}
+
+Dari 1.794 pembatalan pada \texttt{X\_val}, SVM mendeteksi 1.347 pembatalan
+(\textit{recall} 75\%) dan melewatkan 447 pembatalan (\textit{false negative}).
+Sebanyak 318 pemesanan yang tidak batal salah diprediksi batal (\textit{false
+positive}). F1 kelas batal (0,78) lebih rendah daripada F1 kelas tidak batal
+(0,90). Kelas batal juga merupakan kelas yang jumlah sampelnya lebih sedikit.
+
+Simpangan baku antar-\textit{fold} kecil (0,006), dan skor \textit{hold-out} dekat
+dengan rata-rata \textit{k-fold}. Kinerja SVM tidak bergantung pada satu cara
+pembagian data tertentu.
+
+SVM RBF mengungguli Logistic Regression scikit-learn (0,8384 dan 0,7713). Selisih
+ini mengindikasikan bahwa batas keputusan antara kedua kelas tidak linear sehingga
+model linear dengan fitur yang sama tidak dapat menangkapnya sepenuhnya.
+
+\texttt{GaussianNB} hanya mencapai 0,3734. Model ini mengasumsikan setiap fitur
+berdistribusi normal dan saling bebas jika kelasnya diketahui. Banyak fitur pada
+data ini berupa kolom \textit{one-hot} atau fitur diskret yang hampir konstan.
+Kemungkinan penyebabnya adalah variansi yang sangat kecil pada fitur-fitur
+tersebut sehingga \textit{likelihood}-nya mendominasi posterior. Dugaan ini belum
+diuji.
+
+\subsection{Seleksi Fitur SVM}
+
+SVM linear ($C=0{,}1$) yang dilatih dengan tiga puluh fitur menghasilkan sepuluh
+fitur dengan $|w|$ terbesar. Urutannya dari yang terbesar adalah
+\texttt{special\_requests}, \texttt{days\_before\_arrival}, \texttt{date\_rate},
+\texttt{lead\_x\_price}, \texttt{booking\_channel\_Online Travel Agent},
+\texttt{booking\_channel\_Offline Agent}, \texttt{booking\_channel\_Complimentary},
+\texttt{needs\_parking}, \texttt{is\_returning\_guest}, dan \texttt{doy\_cos}.
+Dua fitur teratas sama dengan dua fitur yang nilai mutlak korelasinya terhadap
+target paling besar pada Bab~1. Dua fitur hasil rekayasa, yaitu \texttt{date\_rate} dan
+\texttt{lead\_x\_price}, berada di peringkat ketiga dan keempat.
+
+Untuk melihat apakah seleksi fitur dan reduksi dimensi membantu, SVM RBF ($C=3$,
+$\gamma=0{,}1$) dilatih dengan empat variasi masukan (Tabel~\ref{tab:seleksi}).
+SVM RBF tidak memiliki bobot $w$ sehingga \texttt{Pipeline(select=k)} tidak dapat
+meranking fiturnya sendiri. Karena itu, pada varian top-$k$, peringkat fitur
+diambil dari $|w|$ SVM linear ($C=0{,}1$), lalu SVM RBF dilatih dengan $k$ fitur
+teratas. Peringkat ini dihitung ulang pada setiap \textit{fold} agar data validasi
+tidak ikut menentukan fitur yang dipilih. Varian PCA memakai
+\texttt{Pipeline(pca=0.95)}, yang memilih 21 komponen untuk menjelaskan 95\%
+variansi. Sebagai pembanding, SVM linear juga dievaluasi dengan tiga puluh fitur
+dan dengan \texttt{Pipeline(select=10)}.
+
+\begin{table}[H]
+	\centering
+	\caption{Pengaruh seleksi fitur dan PCA pada SVM}
+	\label{tab:seleksi}
+	\begin{tabular}{l l c c c}
+		\toprule
+		\textbf{Model} & \textbf{Masukan} & \textbf{\textit{Hold-out}} & \textbf{5-\textit{fold} $\mu$} & \textbf{5-\textit{fold} $\sigma$} \\
+		\midrule
+		SVM RBF    & 30 fitur                   & \textbf{0,8384} & \textbf{0,8328} & 0,0062 \\
+		SVM RBF    & PCA (21 komponen)          & 0,8376 & 0,8305 & 0,0062 \\
+		SVM RBF    & 20 fitur teratas           & 0,8219 & 0,8214 & 0,0042 \\
+		SVM RBF    & 10 fitur teratas           & 0,7964 & 0,8013 & 0,0083 \\
+		\midrule
+		SVM linear & 30 fitur                   & 0,7705 & 0,7667 & 0,0077 \\
+		SVM linear & 10 fitur teratas           & 0,7676 & 0,7651 & 0,0081 \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+Seleksi fitur tidak membantu SVM RBF. Dengan dua puluh fitur teratas, rata-rata
+5-\textit{fold} turun 0,0114, dan dengan sepuluh fitur teratas turun 0,0315.
+Kemungkinan penyebabnya, peringkat dari SVM linear hanya mengukur kontribusi
+linear setiap fitur, sedangkan fitur yang bobot linearnya kecil masih dapat
+berguna bagi kernel RBF melalui interaksinya dengan fitur lain. Pada SVM
+linear, seleksi sepuluh fitur hampir tidak mengubah skor (0,7651 dan 0,7667)
+karena peringkatnya berasal dari model yang sama.
+
+PCA dengan 21 komponen menghasilkan skor yang hampir sama dengan tiga puluh fitur
+asli. Selisih rata-ratanya (0,0023) lebih kecil daripada simpangan baku
+antar-\textit{fold} (0,0062). PCA mengurangi dimensi masukan sepertiga tanpa
+penurunan skor yang berarti, tetapi juga tidak menaikkan skor. Karena itu, model
+akhir tetap memakai tiga puluh fitur tanpa seleksi dan tanpa PCA.
+
+\section{\textit{Hyperparameter Tuning}}
+
+\textit{Tuning} dijalankan dengan fungsi \texttt{tune}, yaitu \textit{grid search}
+yang menilai setiap kombinasi parameter dengan rata-rata \textit{macro F1}
+5-\textit{fold} pada \texttt{X\_train}. Untuk SVM, \textit{grid} pada
+\textit{notebook} memvariasikan $C\in\{1,3,5\}$ dengan kernel RBF dan
+$\gamma=0{,}1$ tetap (Tabel~\ref{tab:tuning-svm}). Kelima belas pelatihan
+(tiga kombinasi $\times$ lima \textit{fold}) selesai dalam 172 detik.
+
+\begin{table}[H]
+	\centering
+	\caption{Hasil \textit{tuning} SVM RBF ($\gamma=0{,}1$)}
+	\label{tab:tuning-svm}
+	\begin{tabular}{c c c}
+		\toprule
+		$C$ & \textbf{5-\textit{fold} $\mu$} & \textbf{5-\textit{fold} $\sigma$} \\
+		\midrule
+		1 & 0,8288 & 0,0034 \\
+		3 & \textbf{0,8328} & 0,0062 \\
+		5 & 0,8322 & 0,0064 \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+Nilai $C=3$ memberikan rata-rata tertinggi (0,8328) dan dipilih sebagai
+konfigurasi akhir. Menaikkan $C$ dari 1 ke 3 menambah 0,0040, sedangkan menaikkan
+$C$ dari 3 ke 5 justru menurunkan skor sebesar 0,0006. Selisih antara $C=3$ dan
+$C=5$ jauh lebih kecil daripada simpangan baku antar-\textit{fold} (sekitar
+0,006) sehingga keduanya praktis setara. Semakin besar $C$, semakin besar pula
+hukuman untuk sampel yang melanggar margin. Pada rentang ini, kenaikan $C$ di atas
+3 tidak lagi memperbaiki skor validasi.
+
+Model akhir ($C=3$) yang dilatih pada \texttt{X\_train} konvergen setelah 30.419
+iterasi SMO dan memiliki 9.039 \textit{support vector} (41\% dari 21.857 baris).
+Sebanyak 5.131 di antaranya memiliki $\alpha=C$, yaitu sampel yang berada di
+dalam margin atau salah diklasifikasikan pada data latih. Jumlah ini mengindikasikan
+bahwa kedua kelas banyak beririsan pada ruang fitur.
+
+\todo{Tambahkan hasil \textit{tuning} KNN ($k\in\{5,15,31\}$), Logistic Regression
+($\texttt{lr}\in\{0{,}01;0{,}1\}$), DTL ($\texttt{max\_depth}\in\{5,8,\text{None}\}$),
+dan Bayesian Network ($\texttt{n\_bins}\in\{3,5,10\}$) serta tabel
+\texttt{ranking} semua model.}
+
+\section{Analisis Kesalahan}
+
+SVM hasil \textit{tuning} salah memprediksi 765 dari 5.475 baris \texttt{X\_val}
+(14,0\%), terdiri atas 447 \textit{false negative} dan 318 \textit{false
+positive} (Gambar~\ref{fig:cm-svm}). Jumlah \textit{false negative} yang lebih
+besar sesuai dengan proporsi prediksi batal: model memprediksi 30,4\% baris
+\texttt{X\_val} sebagai batal, sedangkan proporsi pembatalan sebenarnya 32,8\%.
+
+Untuk mencari pola kesalahan, baris \texttt{X\_val} dikelompokkan menjadi
+\textit{true positive} (TP), \textit{true negative} (TN), \textit{false positive}
+(FP), dan \textit{false negative} (FN), lalu nilai fitur aslinya dibandingkan.
+Median \textit{lead time} kelompok TP adalah 161 hari dan kelompok TN 37 hari.
+Kesalahan berada di antara keduanya: median FN 62 hari dan median FP 80 hari.
+Pola yang sama terlihat pada permintaan khusus. Proporsi pemesanan tanpa
+permintaan khusus adalah 68,6\% pada TP dan 37,8\% pada TN, sedangkan pada FP
+61,3\% dan pada FN 42,3\%. Dengan kata lain, pembatalan yang terlewat (FN) memiliki
+ciri yang mirip dengan pemesanan yang tidak batal, dan pemesanan yang salah
+diprediksi batal (FP) memiliki ciri yang mirip dengan pembatalan.
+
+\begin{table}[H]
+	\centering
+	\caption{Tingkat kesalahan SVM pada \texttt{X\_val} berdasarkan \textit{lead time}}
+	\label{tab:error-lead}
+	\begin{tabular}{l r c c r r}
+		\toprule
+		\textbf{\textit{Lead time} (hari)} & \textbf{Baris} & \textbf{Rasio batal} & \textbf{Tingkat kesalahan} & \textbf{FN} & \textbf{FP} \\
+		\midrule
+		0-7     & 802   & 0,086 & 0,072 & 42  & 16 \\
+		8-30    & 965   & 0,181 & 0,123 & 71  & 48 \\
+		31-90   & 1.562 & 0,256 & 0,159 & 149 & 99 \\
+		91-180  & 1.133 & 0,457 & 0,211 & 122 & 117 \\
+		$>180$   & 767   & 0,722 & 0,065 & 24  & 26 \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+Tabel~\ref{tab:error-lead} menunjukkan bahwa tingkat kesalahan tertinggi
+(21,1\%) terjadi pada \textit{lead time} 91-180 hari, yaitu rentang dengan rasio
+pembatalan paling dekat dengan 50\%. Pada \textit{lead time} sangat pendek
+($\le 7$ hari) dan sangat panjang ($>180$ hari), sebagian besar pemesanan berada
+di satu kelas sehingga tingkat kesalahannya di bawah 8\%. Sebanyak 246 baris
+dengan \textit{lead time} kosong pada data mentah tidak masuk ke tabel ini.
+
+Tingkat kesalahan juga berbeda antarkanal pemesanan. Tingkat kesalahan pada Online
+Travel Agent adalah 17,9\% (3.519 baris), sedangkan pada Offline Agent 6,9\%
+(1.573 baris) dan pada Corporate 8,1\% (309 baris). Rasio pembatalan Online Travel
+Agent (36,2\%) dan Offline Agent (30,8\%) tidak jauh berbeda, tetapi pembatalan
+pada Online Travel Agent lebih sulit dipisahkan oleh fitur yang tersedia. Fitur
+tambahan yang membedakan pemesanan pada kanal ini dapat menjadi arah perbaikan.
+
+\todo{Tambahkan \textit{confusion matrix} model lain setelah \textit{tuning}.}
+
+\section{Prediksi Data Uji}
+
+Model akhir, yaitu SVM RBF dengan $C=3$ dan $\gamma=0{,}1$, dilatih ulang dengan
+gabungan \texttt{X\_train} dan \texttt{X\_val} (27.332 baris). Pelatihan ini
+konvergen setelah 37.842 iterasi SMO dengan 10.927 \textit{support vector}.
+Prediksi untuk 6.844 baris \texttt{X\_test} disimpan di
+\texttt{output/svm\_20261121-120000.csv}, dan modelnya disimpan di berkas
+\texttt{.pkl} dengan nama yang sama. Model memprediksi 29,8\% baris data uji
+sebagai batal, mendekati proporsi prediksi batal pada \texttt{X\_val} (30,4\%).
+
+Prediksi pada berkas ini identik dengan prediksi pada submisi Kaggle sebelumnya
+(\texttt{svm\_20261120-214807.csv}) untuk seluruh 6.844 baris. Submisi tersebut
+memperoleh skor 0,84979 pada Kaggle. Skor tersebut lebih
+tinggi daripada \textit{macro F1} \textit{hold-out} (0,8384) dan rata-rata
+5-\textit{fold} (0,8328). Salah satu kemungkinan penyebabnya adalah jumlah data
+latih model akhir yang 25\% lebih banyak, tetapi selisih ini juga dapat berasal
+dari perbedaan sampel data uji.
