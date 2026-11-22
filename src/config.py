@@ -6,6 +6,7 @@ import numpy as np
 
 class Settings:
     SEED = 42
+    VALIDATION_SEED = 20261121
     ROOT = Path(__file__).resolve().parent.parent
     DATA_DIR = ROOT / "data"
     OUTPUT_DIR = ROOT / "output"
