@@ -9,7 +9,7 @@ import numpy as np
 
 def graph_structure(model, feature_names):
     d = len(feature_names)
-    parents = [[] if p < 0 else [int(p)] for p in model.parent]
+    parents = [list(p) for p in model.parents]
 
     order, placed = [], set()
     while len(order) < d:
@@ -28,7 +28,10 @@ def plot_bayes_graph(model, feature_names, class_name="is_canceled", path=None, 
     import matplotlib.pyplot as plt
     from matplotlib.patches import FancyArrowPatch
 
-    ink, muted, accent, paper = "#1c2430", "#8a94a3", "#1f5f8b", "#fbfbfa"
+    # Palet: Midnight Lagoon (teks), Misty Sky (kelas -> fitur), Rosewood (edge antarfitur dan kelas),
+    # Vanilla Cream (latar), Blush Petal (node fitur), Sage Leaf (node root pohon)
+    ink, muted, accent, paper = "#2D3A47", "#A9B7C6", "#B46A72", "#FFF7E6"
+    node, root = "#F7C8D3", "#A8B58A"
     order, edges = graph_structure(model, feature_names)
     d = len(order)
 
@@ -57,24 +60,25 @@ def plot_bayes_graph(model, feature_names, class_name="is_canceled", path=None, 
               alpha={1: 0.9, 2: 0.6, 3: 0.4}.get(r, 0.35))
 
     ax.scatter(*center, s=5200, color=accent, zorder=3)
-    ax.text(*center, class_name.replace("_", "\n"), color="white", ha="center", va="center",
+    ax.text(*center, class_name.replace("_", "\n"), color=paper, ha="center", va="center",
             fontsize=11, fontweight="bold", zorder=4)
 
     for f in range(d):
         x, y = pos[f]
-        ax.scatter(x, y, s=520, color=paper, edgecolor=ink, linewidth=1.4, zorder=3)
+        fill = root if not model.parents[f] else node
+        ax.scatter(x, y, s=520, color=fill, edgecolor=ink, linewidth=1.4, zorder=3)
         ax.text(x, y, str(order.index(f) + 1), ha="center", va="center", fontsize=10, color=ink, zorder=4)
         side = "left" if x > 0.08 else "right" if x < -0.08 else "center"
         ax.text(x * 1.1 + (0.03 if x > 0.08 else -0.03 if x < -0.08 else 0), y * 1.1 + (0.07 * np.sign(y) if abs(x) <= 0.08 else 0),
                 feature_names[f].replace("_", " "), ha=side, va="center", fontsize=11, color=ink, zorder=4)
 
-    kind = "TAN" if len(edges) else "Naive Bayes"
+    kind = f"KDB, k={model.k}" if model.k > 0 else "TAN" if len(edges) else "Naive Bayes"
     ax.set_title(title or f"Struktur Bayesian Network ({kind}): kelas dan {d} fitur",
                  fontsize=14, color=ink, pad=8, loc="left", x=0.02)
     ax.text(0.02, 0.01,
-            f"{len(edges)} edge antarfitur. Garis putus-putus: kelas ke fitur. Panah biru: parent ke child.\n"
+            f"{len(edges)} edge antarfitur. Garis putus-putus: kelas ke fitur. Panah merah: parent ke child. Node hijau: root.\n"
             "Angka di node = urutan topologis (parent selalu bernomor lebih kecil).",
-            transform=ax.transAxes, fontsize=9, color=muted, va="bottom")
+            transform=ax.transAxes, fontsize=9, color=ink, va="bottom")
     if path:
         fig.savefig(path, dpi=160, bbox_inches="tight", facecolor=paper)
         plt.close(fig)
