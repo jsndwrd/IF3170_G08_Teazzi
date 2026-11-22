@@ -18,10 +18,15 @@ def resample(X, y, method=None):
     sampler = {"smote": SMOTE, "undersample": RandomUnderSampler}[method]
     return sampler(random_state=Settings.SEED).fit_resample(X, y)
 
+def model_input(model, X):
+    if hasattr(model, "feature_weights") and isinstance(X, pd.DataFrame):
+        return X
+    return np.asarray(X)
+
 def fit(model, X, y, method=None):
     X, y = resample(X, y, method)
     model = deepcopy(model)
-    model.fit(np.asarray(X), np.asarray(y))
+    model.fit(model_input(model, X), np.asarray(y))
     return model
 
 def fit_predict(model, X_fit, y_fit, X_eval, method=None, preprocessor_factory=None):
@@ -29,7 +34,8 @@ def fit_predict(model, X_fit, y_fit, X_eval, method=None, preprocessor_factory=N
         preprocessor = preprocessor_factory()
         X_fit = preprocessor.fit_transform(X_fit, y_fit)
         X_eval = preprocessor.transform(X_eval)
-    return np.asarray(fit(model, X_fit, y_fit, method).predict(np.asarray(X_eval)))
+    fitted = fit(model, X_fit, y_fit, method)
+    return np.asarray(fitted.predict(model_input(fitted, X_eval)))
 
 def skip(name):
     print(f"[skip] {name}: not implemented yet")
@@ -128,7 +134,7 @@ def misclassified(model, train, X_train, y_train, X_val, y_val, method=None, pre
 def submit(model, name, X, y, X_test, ids, method=None, preprocessor=None):
     model = fit(model, X, y, method)
     path = Settings.OUTPUT_DIR / f"{name}_{datetime.now():%Y%m%d-%H%M%S}.csv"
-    result = pd.DataFrame({Settings.ID: np.asarray(ids), Settings.TARGET: model.predict(np.asarray(X_test))})
+    result = pd.DataFrame({Settings.ID: np.asarray(ids), Settings.TARGET: model.predict(model_input(model, X_test))})
     result.to_csv(path, index=False)
     with open(path.with_suffix(".pkl"), "wb") as f:
         pickle.dump(model, f)
