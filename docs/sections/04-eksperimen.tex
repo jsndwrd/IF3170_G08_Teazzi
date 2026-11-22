@@ -42,9 +42,10 @@ skor hanya dapat berasal dari implementasinya.
 		  & \texttt{DecisionTreeClassifier} & 0,8309 & 0,8201 & 0,0080 \\
 		\midrule
 		Bayes
-		  & \textit{from scratch} (NB) & 0,7108 & 0,7095 & 0,0077 \\
-		  & \textit{from scratch} (TAN) & \textbf{0,7633} & \textbf{0,7641} & 0,0043 \\
-		  & \texttt{GaussianNB} & 0,3734 & 0,3708 & 0,0058 \\
+		  & \textit{from scratch} (NB) & 0,6983 & 0,7119 & 0,0049 \\
+		  & \textit{from scratch} (TAN) & 0,7617 & 0,7624 & 0,0066 \\
+		  & \textit{from scratch} (KDB, $k=10$) & \textbf{0,8140} & \textbf{0,8117} & 0,0072 \\
+		  & \texttt{GaussianNB} & 0,3773 & 0,3804 & 0,0067 \\
 		\bottomrule
 	\end{tabular}
 \end{table}
@@ -107,7 +108,7 @@ SVM RBF mengungguli Logistic Regression scikit-learn (0,8384 dan 0,7713). Selisi
 ini mengindikasikan bahwa batas keputusan antara kedua kelas tidak linear sehingga
 model linear dengan fitur yang sama tidak dapat menangkapnya sepenuhnya.
 
-\texttt{GaussianNB} hanya mencapai 0,3734. Model ini mengasumsikan setiap fitur
+\texttt{GaussianNB} hanya mencapai 0,3773. Model ini mengasumsikan setiap fitur
 berdistribusi normal dan saling bebas jika kelasnya diketahui. Banyak fitur pada
 data ini berupa kolom \textit{one-hot} atau fitur diskret yang hampir konstan.
 Kemungkinan penyebabnya adalah variansi yang sangat kecil pada fitur-fitur
@@ -178,65 +179,136 @@ akhir tetap memakai tiga puluh fitur tanpa seleksi dan tanpa PCA.
 \textit{Naive Bayes} dan TAN memakai diskretisasi, CPT, dan 5 \textit{bin} yang
 sama. Satu-satunya perbedaan adalah struktur: TAN menambahkan satu
 \textit{parent} fitur per fitur (Subbab~\ref{sec:tan}). Pada Tabel~\ref{tab:perbandingan},
-TAN mencapai \textit{macro F1} 5-\textit{fold} 0,7641 ($\sigma=0{,}0043$)
-berbanding 0,7095 ($\sigma=0{,}0077$) untuk \textit{Naive Bayes}. Selisih 0,0546
+TAN mencapai \textit{macro F1} 5-\textit{fold} 0,7624 ($\sigma=0{,}0066$)
+berbanding 0,7119 ($\sigma=0{,}0049$) untuk \textit{Naive Bayes}. Selisih 0,0505
 jauh lebih besar daripada simpangan baku antar-\textit{fold}. Pada \textit{hold-out},
-selisihnya 0,0525 (0,7633 berbanding 0,7108), sehingga arah dan besar selisihnya
-konsisten pada kedua cara evaluasi.
+selisihnya 0,0634 (0,7617 berbanding 0,6983). Besarnya berbeda dari 5-\textit{fold},
+tetapi arahnya sama pada kedua cara evaluasi.
 
 Diskretisasi juga memperbaiki \textit{Naive Bayes} secara besar dibandingkan
-\texttt{GaussianNB} (0,7095 berbanding 0,3708) dengan asumsi kebebasan yang sama.
+\texttt{GaussianNB} (0,7119 berbanding 0,3804) dengan asumsi kebebasan yang sama.
 Hasil ini sejalan dengan dugaan pada bab sebelumnya bahwa distribusi normal tidak
 cocok untuk fitur \textit{one-hot} dan fitur diskret pada data ini. Dugaan
 tersebut belum diuji secara langsung.
 
 \begin{table}[H]
 	\centering
-	\caption{\textit{Classification report} \textit{Naive Bayes} dan TAN pada \texttt{X\_val}}
+	\caption{\textit{Classification report} \textit{Naive Bayes}, TAN, dan KDB ($k=10$) pada \texttt{X\_val}}
 	\label{tab:report-bn}
 	\begin{tabular}{l l c c c}
 		\toprule
 		\textbf{Model} & \textbf{Kelas} & \textbf{\textit{Precision}} & \textbf{\textit{Recall}} & \textbf{F1} \\
 		\midrule
-		\textit{Naive Bayes} & 0 (tidak batal) & 0,8404 & 0,7408 & 0,7875 \\
-		                     & 1 (batal)       & 0,5722 & 0,7113 & 0,6342 \\
+		\textit{Naive Bayes} & 0 (tidak batal) & 0,8246 & 0,7446 & 0,7826 \\
+		                     & 1 (batal)       & 0,5630 & 0,6750 & 0,6139 \\
 		\midrule
-		TAN                  & 0 (tidak batal) & 0,8427 & 0,8498 & 0,8462 \\
-		                     & 1 (batal)       & 0,6863 & 0,6745 & 0,6803 \\
+		TAN                  & 0 (tidak batal) & 0,8374 & 0,8587 & 0,8479 \\
+		                     & 1 (batal)       & 0,6941 & 0,6577 & 0,6754 \\
+		\midrule
+		KDB ($k=10$)         & 0 (tidak batal) & 0,8550 & 0,9242 & 0,8883 \\
+		                     & 1 (batal)       & 0,8135 & 0,6784 & 0,7398 \\
 		\bottomrule
 	\end{tabular}
 \end{table}
 
-\textit{Naive Bayes} memprediksi 40,7\% baris \texttt{X\_val} sebagai batal,
+\textit{Naive Bayes} memprediksi 39,3\% baris \texttt{X\_val} sebagai batal,
 padahal proporsi pembatalan sebenarnya 32,8\%. Kelebihan prediksi batal ini
-terlihat pada \textit{precision} kelas batal yang rendah (0,5722) dan 954
-\textit{false positive}. TAN memprediksi 32,2\% baris sebagai batal, hampir sama
-dengan proporsi sebenarnya, dengan \textit{false positive} turun menjadi 553.
+terlihat pada \textit{precision} kelas batal yang rendah (0,5630) dan 940
+\textit{false positive}. TAN memprediksi 31,1\% baris sebagai batal, hampir sama
+dengan proporsi sebenarnya, dengan \textit{false positive} turun menjadi 520.
 Penyebab yang mungkin adalah informasi ganda dari fitur yang saling berkaitan
 pada \textit{Naive Bayes}. Penyebab ini sejalan dengan struktur TAN pada
 Subbab berikutnya, tetapi belum diuji dengan menghapus fitur yang berkaitan.
 
 \subsection{Struktur yang Dipelajari TAN}
 
-Dari 435 pasangan fitur yang mungkin, TAN memilih 29 edge. Edge dengan
+Dari 666 pasangan fitur yang mungkin, TAN memilih 36 edge. Edge dengan
 \textit{conditional mutual information} terbesar adalah pasangan fitur yang
 diturunkan dari fitur yang sama: \texttt{arrival\_month} $\to$ \texttt{month\_cos}
-(1,147), \texttt{month\_sin} $\to$ \texttt{doy\_sin} (1,122),
+(1,150), \texttt{month\_sin} $\to$ \texttt{doy\_sin} (1,113),
 \texttt{arrival\_month} $\to$ \texttt{month\_sin} (1,093), dan
-\texttt{month\_cos} $\to$ \texttt{doy\_cos} (0,865). Pasangan berikutnya juga
-bersifat turunan: \texttt{num\_adults} $\to$ \texttt{total\_guests} (0,611),
+\texttt{month\_cos} $\to$ \texttt{doy\_cos} (0,867). Pasangan berikutnya juga
+bersifat turunan: \texttt{num\_adults} $\to$ \texttt{total\_guests} (0,609),
 \texttt{weekday\_nights} $\to$ \texttt{total\_nights} (0,494), dan
-\texttt{lead\_x\_price} $\to$ \texttt{days\_before\_arrival} (0,334). Ini adalah
-pasangan yang menyebabkan \textit{Naive Bayes} menghitung informasi yang sama
-berulang kali. Nilai terkecil di antara edge terpilih adalah 0,005, yaitu
-hubungan yang sangat lemah (Gambar~\ref{fig:graf-bn}).
+\texttt{lead\_x\_price} $\to$ \texttt{days\_before\_arrival} (0,333). Ada pula
+pasangan dua kolom \textit{one-hot} dari satu atribut, yaitu
+\texttt{booking\_channel\_Online Travel Agent} $\to$
+\texttt{booking\_channel\_Offline Agent} (0,432): jika satu kolom bernilai 1,
+kolom lain pasti 0. Ini adalah pasangan yang menyebabkan \textit{Naive Bayes}
+menghitung informasi yang sama berulang kali. Nilai terkecil di antara edge
+terpilih kurang dari 0,001, yaitu hubungan yang hampir tidak ada
+(Gambar~\ref{fig:graf-bn}).
 
 Harga dari struktur ini adalah ukuran tabel. Jumlah sel CPT (seluruh nilai
-probabilitas yang disimpan) naik dari 212 pada \textit{Naive Bayes} menjadi 854
+probabilitas yang disimpan) naik dari 240 pada \textit{Naive Bayes} menjadi 918
 pada TAN. CPT terbesar berukuran
 $2\times5\times5=50$ sel (misalnya pada \texttt{days\_before\_arrival}).
-Tabel yang lebih besar membutuhkan data lebih banyak, tetapi dengan 21.857 baris
+Tabel yang lebih besar membutuhkan data lebih banyak, tetapi dengan 21.898 baris
 latih ini belum menimbulkan masalah yang terlihat.
+
+\subsection{KDB: Lebih dari Satu \textit{Parent}}
+\label{sec:hasil-kdb}
+
+KDB (Subbab~\ref{sec:kdb}) dievaluasi dengan diskretisasi dan 5 \textit{bin}
+yang sama, sehingga satu-satunya perbedaan dengan TAN adalah jumlah
+\textit{parent} fitur. Tabel~\ref{tab:kdb} menunjukkan pengaruh $k$.
+
+\begin{table}[H]
+	\centering
+	\caption{Pengaruh $k$ pada KDB (\texttt{n\_bins}=5, \textit{macro F1})}
+	\label{tab:kdb}
+	\begin{tabular}{c c c c r}
+		\toprule
+		$k$ & \textbf{\textit{Hold-out}} & \textbf{5-\textit{fold} $\mu$} & \textbf{5-\textit{fold} $\sigma$} & \textbf{Sel CPT padat} \\
+		\midrule
+		0 (\textit{Naive Bayes}) & 0,6983 & 0,7119 & 0,0049 & 240 \\
+		1 & 0,7630 & 0,7695 & 0,0041 & 968 \\
+		2 & 0,7718 & 0,7744 & 0,0080 & 4.312 \\
+		3 & 0,7826 & 0,7836 & 0,0045 & 18.476 \\
+		4 & 0,7827 & 0,7925 & 0,0051 & 60.840 \\
+		5 & 0,7893 & 0,7956 & 0,0019 & 221.990 \\
+		6 & 0,8023 & 0,8009 & 0,0078 & 911.060 \\
+		8 & 0,8069 & 0,8032 & 0,0022 & $1{,}3\times10^{7}$ \\
+		\textbf{10} & \textbf{0,8140} & \textbf{0,8117} & 0,0072 & $1{,}7\times10^{8}$ \\
+		12 & 0,8125 & 0,8101 & 0,0051 & $1{,}7\times10^{9}$ \\
+		16 & 0,8041 & 0,8006 & 0,0043 & $2{,}7\times10^{11}$ \\
+		29 & 0,7930 & 0,7937 & 0,0056 & $3{,}1\times10^{16}$ \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+Skor naik seiring $k$ sampai sekitar $k=10$, lalu turun. Dari TAN (0,7624) ke KDB
+$k=10$ (0,8117), \textit{macro F1} 5-\textit{fold} naik 0,0493, tujuh kali
+simpangan bakunya. KDB $k=1$ (0,7695) sedikit di atas TAN walaupun keduanya
+memberi satu \textit{parent} per fitur. Bedanya, KDB memilih \textit{parent}
+berdasarkan urutan $I(X_i;C)$, sedangkan TAN memilih pohon dengan total bobot
+terbesar.
+
+Penurunan setelah $k=10$ sejalan dengan jumlah data. Dengan 21.898 baris latih,
+makin banyak \textit{parent}, makin sedikit baris yang jatuh pada setiap
+kombinasi nilai \textit{parent}. Sel CPT padat pada $k=10$ sudah
+$1{,}7\times10^{8}$, sedangkan hitungan yang benar-benar tersimpan sebagai CPT
+\textit{sparse} hanya sekitar 430 ribu. Sebagian besar peluang akhirnya hanya
+berasal dari \textit{smoothing}. Nilai di sekitarnya hampir setara: $k=9$
+mendapat 0,8059, $k=11$ mendapat 0,8125, dan $k=12$ mendapat 0,8101. Selisih
+terbesarnya 0,0066, sebanding dengan simpangan baku, sehingga rentang $k=9$
+sampai 12 tidak dapat dibedakan secara meyakinkan.
+
+Nilai $k=10$ dipilih sebagai model akhir karena berada di rentang tersebut dengan
+CPT lebih kecil daripada $k=11$ dan $k=12$. Pada $k=10$, \texttt{alpha} 0,5 dan 2
+memberi 0,8085 dan 0,8120, sehingga \texttt{alpha}=1 dipertahankan. Nilai
+\texttt{n\_bins} 4 dan 6 memberi 0,8119 dan 0,8070. Empat \textit{bin} setara
+dengan lima, sehingga 5 \textit{bin} dipertahankan agar sama dengan
+\textit{Naive Bayes} dan TAN.
+
+Pada \texttt{X\_val}, KDB $k=10$ mencapai akurasi 0,8437 dan memprediksi 27,3\%
+baris sebagai batal. \textit{Precision} kelas batal naik menjadi 0,8135
+(TAN 0,6941) dan \textit{recall}-nya juga naik menjadi 0,6784 (TAN 0,6577).
+\textit{False positive} turun dari 520 pada TAN menjadi 279.
+
+\todo{Isi skor Kaggle KDB $k=10$ dari \texttt{output/bn\_kdb10.csv} setelah
+berkas itu diunggah, lalu bandingkan dengan \textit{macro F1} \textit{hold-out}
+(0,8140).}
 
 \subsection{Pengaruh \texttt{n\_bins}}
 \label{sec:tuning-bn}
@@ -254,20 +326,20 @@ Jumlah \textit{bin} dipilih dengan \textit{grid search} 5-\textit{fold}
 		\cmidrule(lr){2-3}\cmidrule(lr){4-5}
 		\textbf{\texttt{n\_bins}} & \textbf{5-\textit{fold} $\mu$} & \textbf{5-\textit{fold} $\sigma$} & \textbf{5-\textit{fold} $\mu$} & \textbf{5-\textit{fold} $\sigma$} \\
 		\midrule
-		3  & \textbf{0,7133} & 0,0110 & 0,7379 & 0,0063 \\
-		5  & 0,7095 & 0,0077 & \textbf{0,7641} & 0,0043 \\
-		10 & 0,7062 & 0,0088 & 0,7538 & 0,0069 \\
+		3  & \textbf{0,7148} & 0,0070 & 0,7460 & 0,0056 \\
+		5  & 0,7119 & 0,0049 & \textbf{0,7624} & 0,0066 \\
+		10 & 0,7116 & 0,0042 & 0,7570 & 0,0056 \\
 		\bottomrule
 	\end{tabular}
 \end{table}
 
 Pada \textit{Naive Bayes}, ketiga nilai \texttt{n\_bins} praktis setara karena
-selisih terbesar (0,0071) lebih kecil daripada simpangan baku (0,008--0,011).
-Pada TAN, \texttt{n\_bins}=5 terbaik, sedangkan 3 \textit{bin} turun 0,0262 dan 10
-\textit{bin} turun 0,0103. Kemungkinan penyebabnya, 3 \textit{bin} terlalu kasar
-untuk menangkap hubungan antarfitur, sedangkan 10 \textit{bin} membuat CPT
-dua-\textit{parent} (kelas $\times$ nilai \textit{parent} $\times$ nilai fitur)
-terlalu besar sehingga tiap sel hanya berisi sedikit baris. Dugaan ini belum diuji.
+selisih terbesar (0,0032) lebih kecil daripada simpangan baku (0,004--0,007).
+Pada TAN, \texttt{n\_bins}=5 terbaik, sedangkan 3 \textit{bin} turun 0,0164 dan 10
+\textit{bin} turun 0,0054. Penurunan pada 10 \textit{bin} masih sebanding dengan
+simpangan baku, sehingga hanya 3 \textit{bin} yang jelas lebih buruk.
+Kemungkinan penyebabnya, 3 \textit{bin} terlalu kasar untuk menangkap hubungan
+antarfitur. Dugaan ini belum diuji.
 
 \subsection{Klasifikasi Sensitif-Biaya}
 
@@ -283,21 +355,25 @@ Aturan keputusan dengan $C_{FP}=2$ dan $C_{FN}=1$ (Subbab~\ref{sec:biaya-bn}) di
 		\toprule
 		\textbf{Model} & \textbf{FP} & \textbf{FN} & \textbf{Biaya $2\,FP+FN$} & \textbf{\textit{Macro F1}} & \textbf{Batal (\%)} \\
 		\midrule
-		\textit{Naive Bayes}              & 954 & 518 & 2.426 & 0,7108 & 40,7 \\
-		\textit{Naive Bayes} + biaya      & 720 & 625 & 2.065 & 0,7249 & 34,5 \\
-		TAN                               & 553 & 584 & 1.690 & 0,7633 & 32,2 \\
-		TAN + biaya                       & 286 & 810 & 1.382 & 0,7517 & 23,2 \\
+		\textit{Naive Bayes}              & 940 & 583 & 2.463 & 0,6983 & 39,3 \\
+		\textit{Naive Bayes} + biaya      & 704 & 689 & 2.097 & 0,7119 & 33,0 \\
+		TAN                               & 520 & 614 & 1.654 & 0,7617 & 31,1 \\
+		TAN + biaya                       & 285 & 845 & 1.415 & 0,7421 & 22,5 \\
+		KDB ($k=10$)                      & 279 & 577 & 1.135 & 0,8140 & 27,3 \\
+		KDB ($k=10$) + biaya              & 222 & 626 & 1.070 & 0,8122 & 25,4 \\
 		\bottomrule
 	\end{tabular}
 \end{table}
 
-Aturan sensitif-biaya menurunkan biaya total pada kedua model: dari 2.426 ke 2.065
-(turun 14,9\%) pada \textit{Naive Bayes} dan dari 1.690 ke 1.382 (turun 18,2\%)
-pada TAN. \textit{False positive} turun tajam dan \textit{false negative} naik,
-sesuai dengan harga yang diasumsikan. \textit{Macro F1} tidak otomatis ikut naik:
-pada TAN justru turun (0,7633 menjadi 0,7517) karena \textit{macro F1} menganggap
-semua kesalahan sama berat, sedangkan yang dioptimalkan adalah biaya. Pada
-\textit{Naive Bayes} \textit{macro F1} naik sedikit (0,7108 menjadi 0,7249) karena
+Aturan sensitif-biaya menurunkan biaya total pada ketiga model: dari 2.463 ke 2.097
+(turun 14,9\%) pada \textit{Naive Bayes}, dari 1.654 ke 1.415 (turun 14,5\%)
+pada TAN, dan dari 1.135 ke 1.070 (turun 5,7\%) pada KDB. Penurunan pada KDB
+paling kecil karena KDB sudah lebih jarang memprediksi batal (279
+\textit{false positive}). \textit{False positive} turun dan \textit{false negative}
+naik, sesuai dengan harga yang diasumsikan. \textit{Macro F1} tidak otomatis ikut
+naik: pada TAN justru turun (0,7617 menjadi 0,7421) karena \textit{macro F1}
+menganggap semua kesalahan sama berat, sedangkan yang dioptimalkan adalah biaya.
+Pada \textit{Naive Bayes} \textit{macro F1} naik (0,6983 menjadi 0,7119) karena
 model ini semula terlalu sering memprediksi batal. Pemilihan antara
 \textit{macro F1} dan biaya bergantung pada metrik yang dianggap utama. Metrik
 penilaian tugas ini adalah \textit{macro F1}, sehingga aturan sensitif-biaya

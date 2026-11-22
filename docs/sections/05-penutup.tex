@@ -13,11 +13,13 @@
 \item Bayesian network diimplementasikan \textit{from scratch} dengan
 diskretisasi \textit{equal-frequency}, CPT ber-\textit{Laplace smoothing}, dan
 inferensi di ruang log. Optimasi struktur TAN menaikkan \textit{macro F1}
-5-\textit{fold} dari 0,7095 (\textit{Naive Bayes}) menjadi 0,7641, dan struktur
+5-\textit{fold} dari 0,7119 (\textit{Naive Bayes}) menjadi 0,7624, dan struktur
 yang dipelajari memasangkan fitur-fitur yang diturunkan dari fitur yang sama.
+KDB dengan sepuluh \textit{parent} per fitur dan CPT \textit{sparse} menaikkannya
+lagi menjadi 0,8117.
 Aturan keputusan sensitif-biaya ($C_{FP}=2$, $C_{FN}=1$, nilai asumsi) menurunkan
-biaya total 14,9\% pada \textit{Naive Bayes} dan 18,2\% pada TAN, tetapi
-\textit{macro F1} TAN turun dari 0,7633 menjadi 0,7517.
+biaya total 14,9\% pada \textit{Naive Bayes}, 14,5\% pada TAN, dan 5,7\% pada
+KDB, tetapi \textit{macro F1} TAN turun dari 0,7617 menjadi 0,7421.
 \end{enumerate}
 
 \todo{Tambahkan kesimpulan untuk KNN, Logistic Regression, dan DTL, serta model
@@ -32,9 +34,11 @@ terbaik secara keseluruhan setelah \textit{tuning}.}
 	untuk melihat apakah \textit{macro F1} naik.
 \end{enumerate}
 
-Pada Bayesian network, TAN hanya mengizinkan satu \textit{parent} fitur per
-fitur. Struktur dengan lebih banyak \textit{parent} (misalnya $k$-dependence
-Bayesian classifier) dapat diuji, dengan risiko tabel CPT yang makin besar.
+Pada Bayesian network, skor KDB turun setelah $k=10$, kemungkinan karena data per
+kombinasi \textit{parent} makin sedikit. Memilih $k$ berbeda untuk setiap fitur dapat diuji.
+\textit{Preprocessing} khusus Bayes juga dapat diuji: menyimpan \texttt{booking\_channel}
+sebagai satu kolom kategori alih-alih \textit{one-hot} (TAN memasangkan dua kolom
+\textit{one-hot} dari atribut itu) dan menjadikan nilai kosong sebagai kategori sendiri.
 Fitur yang diturunkan dari fitur yang sama (misalnya \texttt{month\_sin},
 \texttt{month\_cos}, dan \texttt{arrival\_month}) juga dapat dikurangi untuk
 melihat apakah selisih \textit{Naive Bayes} dan TAN mengecil.
