@@ -12,14 +12,9 @@ def load_data():
     return read("train"), read("test")
 
 
-def split(train):
+def split(train, seed=Settings.VALIDATION_SEED):
     X, y = train.drop(columns=[Settings.ID, Settings.TARGET]), train[Settings.TARGET]
-    return train_test_split(X, y, test_size=Settings.TEST_SIZE, stratify=y, random_state=Settings.SEED)
-
-
-def drop_duplicates(X, y):
-    keep = ~X.duplicated()
-    return X[keep], y[keep]
+    return train_test_split(X, y, test_size=Settings.TEST_SIZE, stratify=y, random_state=seed)
 
 
 def arrival_date(df):
@@ -70,6 +65,9 @@ class Preprocessor:
                 "robust": lambda: (X.median(), X.quantile(0.75) - X.quantile(0.25)),
             }[self.scaler]()
             self.center, self.spread = center, spread.replace(0, 1)
+            binary = X.columns[(X.isin([0, 1]).all()) & (X.nunique() <= 2)]
+            self.center.loc[binary] = 0
+            self.spread.loc[binary] = 1
         return self
 
     # Applies the fitted steps to any split, keeping its index
@@ -87,18 +85,24 @@ class Preprocessor:
         date, self.prior = arrival_date(X), y.mean()
         self.date_stats, self.date_count = self.rate_table(date, y), date.value_counts()
         self.train_rate = np.zeros(len(X))
-        for tr, va in StratifiedKFold(5, shuffle=True, random_state=Settings.SEED).split(X, y):
-            self.train_rate[va] = self.date_rate(self.rate_table(date.iloc[tr], y.iloc[tr]), date.iloc[va])
+        for tr, va in StratifiedKFold(
+            n_splits=Settings.N_FOLDS, shuffle=True, random_state=Settings.SEED
+        ).split(X, y):
+            fold_prior = y.iloc[tr].mean()
+            table = self.rate_table(date.iloc[tr], y.iloc[tr])
+            self.train_rate[va] = self.date_rate(table, date.iloc[va], prior=fold_prior)
 
     def rate_table(self, date, y):
         return pd.DataFrame({"date": date.values, "y": np.asarray(y)}).groupby("date")["y"].agg(["sum", "count"])
 
-    def date_rate(self, table, date):
+    def date_rate(self, table, date, prior=None):
         s = table.reindex(date.values)
-        return ((s["sum"].fillna(0) + self.smoothing * self.prior) / (s["count"].fillna(0) + self.smoothing)).values
+        prior = self.prior if prior is None else prior
+        return ((s["sum"].fillna(0) + self.smoothing * prior) / (s["count"].fillna(0) + self.smoothing)).values
 
     def add_dates(self, X, rate=None):
         X = X.copy()
+        X["nightly_rate_zero"] = X["nightly_rate_idr"].eq(0).astype(float)
         for col, by, table in (("nightly_rate_idr", ["room_category", "arrival_month"], self.price_by),
                                ("days_before_arrival", ["booking_channel", "arrival_month"], self.lead_by)):
             X[col] = X[col].fillna(pd.Series(table.reindex(pd.MultiIndex.from_frame(X[by])).values, index=X.index))
