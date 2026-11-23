@@ -55,6 +55,10 @@ class KNN(BaseModel):
         return self
 
     def predict(self, X):
+        return self.classes_[np.argmax(self.predict_proba(X), axis=1)]
+
+    # Share of the k nearest neighbours in each class
+    def predict_proba(self, X):
         if not hasattr(self, "X_"):
             raise ValueError("Call fit before predict.")
 
@@ -66,7 +70,7 @@ class KNN(BaseModel):
         if self.k > len(self.X_):
             raise ValueError("k cannot be greater than the number of training examples.")
 
-        predictions = np.empty(len(queries), dtype=self.classes_.dtype)
+        votes = np.zeros((len(queries), len(self.classes_)))
         train_squared_norms = None
         if self.metric == "euclidean":
             train_squared_norms = np.einsum("ij,ij->i", self.X_, self.X_)
@@ -92,10 +96,9 @@ class KNN(BaseModel):
 
             for offset, row in enumerate(distances):
                 neighbors = self._nearest_indices(row)
-                votes = np.bincount(self.y_encoded_[neighbors], minlength=len(self.classes_))
-                predictions[start + offset] = self.classes_[np.argmax(votes)]
+                votes[start + offset] = np.bincount(self.y_encoded_[neighbors], minlength=len(self.classes_))
 
-        return predictions
+        return votes / self.k
 
     @staticmethod
     def _as_features(values, name):
