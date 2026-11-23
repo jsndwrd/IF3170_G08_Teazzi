@@ -7,6 +7,7 @@ from .base import BaseModel
 # dengan aturan keputusan sensitif-biaya lewat cost_fp dan cost_fn.
 #
 # Referensi:
+# - Dasar Bayesian network (DAG, CPT, chain rule), Naive Bayes, MAP, dan Laplace smoothing: materi kuliah IF3170, "BayesNet" (Materi 14), Edunex ITB, 2026.
 # - TAN: N. Friedman, D. Geiger, M. Goldszmidt, "Bayesian Network Classifiers", Machine Learning 29(2-3), 131-163, 1997.
 #   https://doi.org/10.1023/A:1007465528199
 # - Pohon dependensi dengan bobot informasi bersama: C. K. Chow, C. N. Liu, "Approximating Discrete Probability
