@@ -146,13 +146,109 @@ $|w|$ dipakai untuk seleksi fitur (Subbab~\ref{sec:seleksi}).
 \section{Decision Tree Learning}
 \label{sec:dtl}
 
-\todo{Implementasi \texttt{DTL.fit} dan \texttt{DTL.predict} di
-\texttt{src/models/dtl.py} belum selesai. Parameter yang sudah disiapkan:
-\texttt{criterion} (\texttt{entropy}/\texttt{gini}), \texttt{max\_depth}, dan
-\texttt{min\_samples\_split}. Jelaskan perhitungan \textit{information gain},
-penanganan atribut kontinu, kriteria berhenti, dan potongan kode. Jika DTL
-menyediakan \texttt{feature\_importances\_}, \texttt{Pipeline} otomatis dapat
-memakainya untuk seleksi fitur.}
+\subsection{Formulasi}
+
+Kelas \texttt{DTL} di \texttt{src/models/dtl.py} membangun pohon keputusan biner.
+Setiap simpul dalam menguji satu fitur terhadap satu ambang, $x_f\le t$. Sampel
+yang memenuhi syarat masuk ke cabang kiri, dan sisanya masuk ke cabang kanan.
+Ukuran pemilihan atribut mengikuti ID3/C4.5, yaitu \textit{information gain}
+berbasis entropi, sedangkan bentuk pohonnya biner seperti CART. Untuk himpunan
+sampel $S$ dengan proporsi kelas $p_c$, \textit{impurity} dihitung dengan salah
+satu kriteria berikut (parameter \texttt{criterion}):
+\begin{equation}
+	H(S)=-\sum_{c}p_c\log_2 p_c \quad(\texttt{entropy}),\qquad
+	G(S)=1-\sum_{c}p_c^2 \quad(\texttt{gini}).
+\end{equation}
+Pemisahan $S$ menjadi $S_L$ dan $S_R$ dinilai dengan \textit{information gain}
+\begin{equation}
+	\text{Gain}(S,f,t)=I(S)-\frac{|S_L|}{|S|}I(S_L)-\frac{|S_R|}{|S|}I(S_R),
+\end{equation}
+dengan $I$ adalah $H$ atau $G$. Pada setiap simpul, pasangan $(f,t)$ dengan
+\textit{gain} terbesar dipilih, lalu pohon tumbuh secara rekursif pada kedua
+cabang.
+
+\subsection{Atribut Kontinu}
+
+Setelah \textit{preprocessing}, semua fitur sudah berupa bilangan. Atribut
+kategorikal sudah diubah dengan \textit{ordinal} atau \textit{one-hot encoding}
+(Bab~3), sehingga ambang pada kolom \textit{one-hot} berarti ``kategori ini
+dibandingkan dengan kategori lain''. Kandidat ambang untuk setiap fitur dicari
+sebagai berikut.
+\begin{enumerate}
+	\item Urutkan nilai fitur pada simpul tersebut.
+	\item Kandidat ambang adalah titik tengah antara dua nilai berurutan yang
+	berbeda. Ambang di antara dua nilai yang sama tidak mungkin memisahkannya.
+	\item Jumlah setiap kelas di cabang kiri untuk semua kandidat dihitung
+	sekaligus dengan \textit{cumulative sum} atas label yang sudah diurutkan.
+	Jumlah di cabang kanan adalah jumlah total dikurangi jumlah kiri.
+	\item \textit{Gain} semua kandidat dihitung dalam satu operasi vektor NumPy,
+	lalu kandidat terbaik dibandingkan antarfitur.
+\end{enumerate}
+Dengan cara ini, satu fitur pada satu simpul cukup diproses dalam
+$O(n\log n)$ untuk pengurutan, bukan $O(n^2)$ jika setiap ambang dihitung ulang
+dari awal. Jika titik tengah dua bilangan \textit{floating point} yang sangat
+berdekatan terbulatkan ke nilai yang lebih besar, nilai yang lebih kecil dipakai
+sebagai ambang agar kedua sisi tetap terpisah. Jika beberapa pemisahan memiliki
+\textit{gain} yang sama, fitur dengan indeks terkecil yang dipilih.
+
+\subsection{Kriteria Berhenti dan Prediksi}
+
+Sebuah simpul menjadi daun jika salah satu kondisi berikut terpenuhi.
+\begin{enumerate}
+	\item Semua sampel pada simpul memiliki kelas yang sama.
+	\item Jumlah sampel kurang dari \texttt{min\_samples\_split}.
+	\item Kedalaman simpul sudah mencapai \texttt{max\_depth}.
+	\item Tidak ada pemisahan dengan \textit{gain} positif, misalnya karena semua
+	fitur pada simpul bernilai sama.
+\end{enumerate}
+Simpul dalam disimpan sebagai \textit{tuple} (fitur, ambang, kiri, kanan),
+sedangkan daun menyimpan proporsi kelas dari sampel latih yang sampai ke daun
+tersebut. \texttt{predict\_proba} menelusuri pohon dari akar sampai daun dan
+mengembalikan proporsi tersebut. \texttt{predict} mengembalikan kelas mayoritas
+pada daun. Parameter \texttt{max\_depth} dan \texttt{min\_samples\_split} membatasi
+ukuran pohon agar tidak \textit{overfitting}. Konfigurasi di \textit{notebook}
+memakai \texttt{criterion="entropy"} dan \texttt{max\_depth} $=10$. Pohon ini
+memiliki kedalaman 10 dan 344 daun jika dilatih pada \texttt{X\_train}.
+
+Pohon keputusan tidak dipengaruhi skala fitur karena setiap pemisahan hanya
+membandingkan nilai satu fitur dengan ambang. Karena itu, DTL memakai varian
+\textit{preprocessing} \texttt{tree} tanpa \textit{capping} dan standardisasi
+(Tabel~\ref{tab:varian-prep}). Nilai hilang tetap diimputasi lebih dahulu karena
+implementasi ini tidak menangani NaN.
+
+\subsection{\textit{Feature Importance}}
+
+Setiap kali fitur $f$ dipakai untuk memisahkan simpul dengan $n_t$ sampel,
+nilai $n_t\cdot\text{Gain}$ ditambahkan ke skor fitur tersebut. Setelah pohon
+selesai dibangun, skor dinormalkan agar jumlahnya 1 dan disimpan di
+\texttt{feature\_importances\_}. Ukuran ini sama dengan \textit{mean decrease in
+impurity} pada scikit-learn. \texttt{Pipeline} memakai atribut ini untuk seleksi
+fitur (Subbab~\ref{sec:seleksi}). Misalnya, KNN memakai
+\texttt{DTL(max\_depth=10, min\_samples\_split=50)} sebagai pemeringkat. Pada
+\texttt{X\_train}, lima fitur terpenting adalah \texttt{days\_before\_arrival}
+(0,277), \texttt{lead\_x\_price} (0,140), \texttt{special\_requests} (0,119),
+\texttt{booking\_channel} Online Travel Agent (0,117), dan \texttt{date\_rate}
+(0,095).
+
+\subsection{Verifikasi}
+
+Dengan \texttt{criterion="entropy"} dan \texttt{max\_depth} $=10$, \texttt{DTL}
+dibandingkan dengan \texttt{DecisionTreeClassifier} scikit-learn pada data dan
+parameter yang sama. Prediksi kedua model sama pada 99,6\% baris \texttt{X\_val}.
+\textit{Macro F1} \textit{hold-out} adalah 0,8355 untuk \texttt{DTL} dan 0,8371
+untuk scikit-learn, sedangkan rata-rata 5-\textit{fold} adalah 0,8220 dan 0,8224.
+Perbedaan ini berasal dari cara memilih di antara pemisahan yang \textit{gain}-nya
+sama. Scikit-learn mengacak urutan fitur sehingga hasilnya juga berubah menurut
+\texttt{random\_state}: dengan \textit{seed} 0 sampai 4, \textit{macro F1}
+\textit{hold-out}-nya berkisar 0,8343--0,8357. Skor \texttt{DTL} berada di dalam
+rentang tersebut. Sebagai gantinya, \texttt{DTL} memilih fitur dengan indeks
+terkecil sehingga hasilnya selalu sama.
+
+\lstinputlisting[caption={Pelatihan pohon (\texttt{src/models/dtl.py})},linerange={7,9-10,13-21,32-43}]{../src/models/dtl.py}
+
+\lstinputlisting[caption={\textit{Impurity} dan pencarian pemisahan terbaik (\texttt{src/models/dtl.py})},linerange={46-52,55-72}]{../src/models/dtl.py}
+
+\lstinputlisting[caption={Prediksi DTL (\texttt{src/models/dtl.py})},linerange={24-25,28-29,74-79}]{../src/models/dtl.py}
 
 \section{Bayesian Network}
 \label{sec:bn}
