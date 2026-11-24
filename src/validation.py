@@ -1,4 +1,5 @@
 import pickle
+from collections.abc import Mapping
 from copy import deepcopy
 from datetime import datetime
 
@@ -23,6 +24,13 @@ def model_input(model, X):
         return X
     return np.asarray(X)
 
+def model_preprocessor_factory(model, factories):
+    if isinstance(factories, Mapping):
+        factories = factories.get(type(model).__name__, factories.get("default"))
+        if factories is None:
+            raise ValueError(f"No preprocessor factory configured for {type(model).__name__}.")
+    return factories
+
 def fit(model, X, y, method=None):
     X, y = resample(X, y, method)
     model = deepcopy(model)
@@ -31,6 +39,7 @@ def fit(model, X, y, method=None):
 
 def fit_predict(model, X_fit, y_fit, X_eval, method=None, preprocessor_factory=None):
     if preprocessor_factory is not None:
+        preprocessor_factory = model_preprocessor_factory(model, preprocessor_factory)
         preprocessor = preprocessor_factory()
         X_fit = preprocessor.fit_transform(X_fit, y_fit)
         X_eval = preprocessor.transform(X_eval)
