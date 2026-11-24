@@ -3,8 +3,8 @@ import numpy as np
 from .base import BaseModel
 
 
-# Klasifikator Bayesian network atas fitur terdiskretisasi: Naive Bayes (default), TAN (tree=True), atau KDB (k>0),
-# dengan aturan keputusan sensitif-biaya lewat cost_fp dan cost_fn.
+# Klasifier Bayesian network buat fitur yang udah didiskretisasi: Naive Bayes (default), TAN (tree=True), atau KDB (k>0),
+# plus aturan keputusan pakai biaya lewat cost_fp dan cost_fn.
 #
 # Referensi:
 # - Dasar Bayesian network (DAG, CPT, chain rule), Naive Bayes, MAP, dan Laplace smoothing: materi kuliah IF3170, "BayesNet" (Materi 14), Edunex ITB, 2026.
@@ -20,11 +20,9 @@ from .base import BaseModel
 # - Aturan keputusan sensitif-biaya: C. Elkan, "The Foundations of Cost-Sensitive Learning", Proc. IJCAI, 973-977, 2001.
 #   https://ijcai.org/proceedings/2001/133
 class SparseCPT:
-    # CPT yang hanya menyimpan sel yang terisi data. Dipakai jika CPT padat terlalu besar (k besar).
-    # Sel kosong tidak disimpan: peluangnya alpha / (n_konteks + alpha * n_values), sama dengan Laplace smoothing.
     def __init__(self, keys, sizes, n_values, alpha):
         self.sizes, self.n_values, self.alpha = sizes, n_values, alpha
-        context = np.ravel_multi_index(keys[:-1], sizes)  # (kelas, bin parent...) -> satu bilangan
+        context = np.ravel_multi_index(keys[:-1], sizes)  # (kelas, bin parent...) -> satu angka
         self.cell_keys, self.cell_counts = np.unique(context * n_values + keys[-1], return_counts=True)
         self.context_keys, self.context_counts = np.unique(context, return_counts=True)
 
@@ -42,7 +40,7 @@ class SparseCPT:
 
 
 class BayesNetwork(BaseModel):
-    DENSE_LIMIT = 100_000  # CPT dengan sel lebih banyak dari ini disimpan sebagai SparseCPT
+    DENSE_LIMIT = 100_000
 
     def __init__(self, n_bins=5, alpha=1.0, tree=False, k=0, cost_fp=1.0, cost_fn=1.0):
         self.n_bins, self.alpha, self.tree, self.k = n_bins, alpha, tree, k
@@ -66,7 +64,7 @@ class BayesNetwork(BaseModel):
             bin_columns.append(np.searchsorted(edges, X[:, j], side="left"))
         return np.column_stack(bin_columns)
 
-    # I(Xi; Xj | C), bobot edge untuk TAN dan KDB
+    # I(Xi; Xj | C), jadi bobot edge buat TAN dan KDB
     def conditional_mutual_info(self, xi, xj, y_idx, ki, kj):
         joint = np.zeros((len(self.classes), ki, kj))
         np.add.at(joint, (y_idx, xi, xj), 1)
@@ -81,7 +79,7 @@ class BayesNetwork(BaseModel):
         weight = joint[seen] / joint.sum()
         return float((weight * np.log(numerator / denominator)).sum())
 
-    # I(X; C), dipakai KDB untuk mengurutkan fitur dari yang paling informatif
+    # I(X; C), dipakai KDB buat ngurutin fitur dari yang paling informatif
     def mutual_info(self, x, y_idx, kx):
         joint = np.zeros((len(self.classes), kx))
         np.add.at(joint, (y_idx, x), 1)
@@ -100,7 +98,7 @@ class BayesNetwork(BaseModel):
                 weight[i, j] = weight[j, i] = cmi
         return weight
 
-    # Maximum weight spanning tree (Prim) dari fitur 0, mengembalikan parent tiap fitur (-1 untuk root)
+    # Maximum weight spanning tree (Prim) mulai dari fitur 0, balikin parent tiap fitur (-1 buat root)
     def learn_tree(self, B, y_idx):
         n_features = B.shape[1]
         weight = self.cmi_matrix(B, y_idx)
@@ -122,8 +120,7 @@ class BayesNetwork(BaseModel):
             best_source[better] = new
         return parent
 
-    # KDB: urutkan fitur menurut I(X; C), lalu tiap fitur mengambil maksimal k parent dari fitur
-    # yang urutannya lebih awal dengan I(Xi; Xj | C) terbesar. Parent selalu lebih awal, jadi tidak ada siklus.
+    # KDB: urutin fitur berdasarkan I(X; C), terus tiap fitur ambil maksimal k parent dari fitur
     def learn_kdb(self, B, y_idx):
         weight = self.cmi_matrix(B, y_idx)
         relevance = [self.mutual_info(B[:, j], y_idx, len(edges) + 1) for j, edges in enumerate(self.edges)]
@@ -150,11 +147,11 @@ class BayesNetwork(BaseModel):
         self.fit_bins(X)
         B = self.discretize(X)
 
-        self.parents = self.learn_structure(B, y_idx)  # daftar parent fitur untuk tiap fitur
+        self.parents = self.learn_structure(B, y_idx)  # daftar parent tiap fitur
         class_counts = np.bincount(y_idx)
         self.log_prior = np.log(class_counts / len(y_idx))
 
-        self.log_cpt = []  # satu CPT (log) per fitur, diakses [kelas, bin parent..., feature_bin]
+        self.log_cpt = []  # satu CPT (log) per fitur, aksesnya [kelas, bin parent..., feature_bin]
         for j, edges in enumerate(self.edges):
             n_values = len(edges) + 1
             parents = self.parents[j]
@@ -162,7 +159,7 @@ class BayesNetwork(BaseModel):
                 parent_sizes = [len(self.edges[p]) + 1 for p in parents]
                 parent_bins = [B[:, p] for p in parents]
             else:
-                parent_sizes = [1]  # tanpa parent, sumbu parent CPT berukuran 1
+                parent_sizes = [1]
                 parent_bins = [np.zeros(len(B), dtype=int)]
 
             sizes = [len(self.classes), *parent_sizes]
@@ -170,8 +167,8 @@ class BayesNetwork(BaseModel):
                 self.log_cpt.append(SparseCPT([y_idx, *parent_bins, B[:, j]], sizes, n_values, self.alpha))
                 continue
 
-            counts = np.zeros((len(self.classes), *parent_sizes, n_values))  # jumlah baris per sel
-            np.add.at(counts, (y_idx, *parent_bins, B[:, j]), 1)  # +1 di sel milik tiap baris training
+            counts = np.zeros((len(self.classes), *parent_sizes, n_values))
+            np.add.at(counts, (y_idx, *parent_bins, B[:, j]), 1)
 
             smoothed = counts + self.alpha
             total = counts.sum(axis=-1, keepdims=True) + self.alpha * n_values
@@ -184,10 +181,10 @@ class BayesNetwork(BaseModel):
         for j, table in enumerate(self.log_cpt):
             parents = self.parents[j]
             if parents:
-                # bin tiap parent fitur untuk tiap sampel
+                # bin tiap parent fitur buat tiap sampel
                 parent_bins = [B[:, p] for p in parents]
             else:
-                # fitur ga ada parent, selalu pakai parent_bin 0
+                # fitur ga punya parent, selalu pakai parent_bin 0
                 parent_bins = [0]
 
             feature_bin = B[:, j]
@@ -195,8 +192,8 @@ class BayesNetwork(BaseModel):
                 log_probs = np.stack([table.log_prob([np.full(len(B), c), *parent_bins, feature_bin])
                                       for c in range(len(self.classes))])
             else:
-                log_probs = table[(slice(None), *parent_bins, feature_bin)]  # shape: (n_classes, n_samples)
-            scores += log_probs.T  # transpose to (n_samples, n_classes)
+                log_probs = table[(slice(None), *parent_bins, feature_bin)]  # bentuknya (n_classes, n_samples)
+            scores += log_probs.T
         return scores
 
     def predict_proba(self, X):
@@ -205,7 +202,7 @@ class BayesNetwork(BaseModel):
         unnormalized = np.exp(scores)
         return unnormalized / unnormalized.sum(axis=1, keepdims=True)
 
-    # Untuk dua kelas, memprediksi 1 jika cost_fn * P(1) > cost_fp * P(0)
+    # Kalau cuma dua kelas, prediksi 1 kalau cost_fn * P(1) > cost_fp * P(0)
     def predict(self, X):
         proba = self.predict_proba(X)
         if len(self.classes) == 2:

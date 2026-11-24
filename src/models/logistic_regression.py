@@ -85,7 +85,7 @@ class LogisticRegression(BaseModel):
             self.loss_history_.append(self._objective(X, y))
             self.loss_steps_.append(int(self.n_iter))
 
-        
+
         self.coef_ = self.weights_[np.newaxis, :]
         self.intercept_ = np.array([self.bias_])
         self.n_iter_ = int(self.n_iter)
