@@ -1,6 +1,5 @@
-"""Gambar graf Bayesian Network (bonus spesifikasi). Hanya untuk visualisasi, tidak dipakai oleh fit/predict.
-
-Struktur graf (kelas -> fitur dan parent fitur -> child) mengikuti model TAN:
+"""
+Struktur grafnya (kelas -> fitur dan parent fitur -> child) ngikutin model TAN:
 N. Friedman, D. Geiger, M. Goldszmidt, "Bayesian Network Classifiers", Machine Learning 29(2-3), 131-163, 1997.
 https://doi.org/10.1023/A:1007465528199
 """
