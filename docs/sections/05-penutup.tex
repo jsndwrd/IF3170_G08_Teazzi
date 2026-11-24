@@ -20,9 +20,16 @@ lagi menjadi 0,8124.
 Aturan keputusan sensitif-biaya ($C_{FP}=2$, $C_{FN}=1$, nilai asumsi) menurunkan
 biaya total 14,2\% pada \textit{Naive Bayes}, 18,0\% pada TAN, dan 5,3\% pada
 KDB, tetapi \textit{macro F1} TAN turun dari 0,7645 menjadi 0,7592.
+	\item DTL diimplementasikan \textit{from scratch} sebagai CART dengan pemisahan
+	biner untuk atribut numerik dan kategorikal serta penanganan nilai kosong di
+	dalam pohon, sehingga dapat dilatih langsung pada data mentah. \textit{Minimal
+	cost-complexity pruning} ($\texttt{ccp\_alpha}=3\times10^{-4}$) menaikkan
+	\textit{macro F1} 5-\textit{fold} dari 0,7982 (pohon penuh) menjadi 0,8223 dan
+	memperkecil pohon dari 2.526 menjadi 122 daun. Skor dan prediksinya identik
+	dengan \texttt{DecisionTreeClassifier} scikit-learn dengan parameter yang sama.
 \end{enumerate}
 
-\todo{Tambahkan kesimpulan untuk KNN, Logistic Regression, dan DTL, serta model
+\todo{Tambahkan kesimpulan untuk KNN dan Logistic Regression, serta model
 terbaik secara keseluruhan setelah \textit{tuning}.}
 
 \section{Saran}
@@ -42,5 +49,10 @@ sebagai satu kolom kategori alih-alih \textit{one-hot} (TAN memasangkan dua kolo
 Fitur yang diturunkan dari fitur yang sama (misalnya \texttt{month\_sin},
 \texttt{month\_cos}, dan \texttt{arrival\_month}) juga dapat dikurangi untuk
 melihat apakah selisih \textit{Naive Bayes} dan TAN mengecil.
+
+Pada DTL, imputasi median kelompok masih lebih baik daripada penanganan nilai
+kosong di dalam pohon. \textit{Surrogate split} dari CART asli, yaitu memakai
+fitur lain yang pemisahannya paling mirip untuk baris yang kosong, dapat diuji
+untuk melihat apakah selisih tersebut hilang.
 
 \todo{Tambahkan saran dari hasil algoritma lain.}
