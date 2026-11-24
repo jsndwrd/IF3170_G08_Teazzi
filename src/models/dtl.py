@@ -4,8 +4,9 @@ from .base import BaseModel
 
 # Referensi:
 #   L. Breiman, J. Friedman, R. Olshen, C. Stone, Classification and Regression Trees, Wadsworth, 1984
-#   (CART, subset split kategori).
+#   (CART, subset split kategori, minimal cost-complexity pruning).
 #   J. R. Quinlan, C4.5: Programs for Machine Learning, Morgan Kaufmann, 1993 (gain dikali proporsi nilai yang diketahui).
+#   scikit-learn, "Minimal Cost-Complexity Pruning", https://scikit-learn.org/stable/modules/tree.html#minimal-cost-complexity-pruning
 
 
 # A leaf has left = None; an inner node sends a row left if x[feature] <= test (numeric) or x[feature] in test (categorical codes)
@@ -23,10 +24,11 @@ class Node:
         return np.where(known, left, self.missing_left)
 
 
-# CART: binary splits on numeric thresholds and on category subsets, with missing values
+# CART: binary splits on numeric thresholds and on category subsets, with missing values and cost-complexity pruning
 class DTL(BaseModel):
-    def __init__(self, criterion="gini", max_depth=None, min_samples_split=2):
-        self.criterion, self.max_depth, self.min_samples_split = criterion, max_depth, min_samples_split
+    # ccp_alpha > 0 prunes the grown tree to the subtree minimizing R(T) + ccp_alpha * |leaves(T)|
+    def __init__(self, criterion="gini", max_depth=None, min_samples_split=2, ccp_alpha=0.0):
+        self.criterion, self.max_depth, self.min_samples_split, self.ccp_alpha = criterion, max_depth, min_samples_split, ccp_alpha
 
     def fit(self, X, y):
         X = np.asarray(X)
@@ -38,6 +40,8 @@ class DTL(BaseModel):
         X = self._encode(X)
         self.classes_, y = np.unique(np.asarray(y), return_inverse=True)
         self.tree_ = self._grow(X, y, 0)
+        if self.ccp_alpha > 0:
+            self.tree_ = self._prune(self.tree_, len(y))[0]
         self.feature_importances_ = np.zeros(X.shape[1])
         self._add_importance(self.tree_)
         total = self.feature_importances_.sum()
@@ -124,6 +128,18 @@ class DTL(BaseModel):
         if best is not None:
             best.score *= n  # n_t * gain, summed per feature for feature_importances_
         return best
+
+    # Minimal cost-complexity pruning (Breiman et al., 1984), bottom-up: a node becomes a leaf when R(t) + alpha is no more than
+    # the cost of its best subtree, R(t) = n_t / n * impurity(t). Returns (node, cost of the kept subtree)
+    def _prune(self, node, n):
+        leaf_cost = node.counts.sum() / n * self._impurity(node.counts) + self.ccp_alpha
+        if node.left is None:
+            return node, leaf_cost
+        node.left, left_cost = self._prune(node.left, n)
+        node.right, right_cost = self._prune(node.right, n)
+        if leaf_cost <= left_cost + right_cost:
+            return Node(node.counts), leaf_cost
+        return node, left_cost + right_cost
 
     def _add_importance(self, node):
         if node.left is not None:
