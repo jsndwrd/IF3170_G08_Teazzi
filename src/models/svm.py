@@ -2,6 +2,10 @@ import numpy as np
 
 from .base import BaseModel
 
+# Referensi:
+#   J. C. Platt, "Sequential Minimal Optimization: A Fast Algorithm for Training Support Vector Machines", MSR-TR-98-14, 1998.
+#   R.-E. Fan, P.-H. Chen, C.-J. Lin, "Working Set Selection Using Second Order Information for Training SVM", JMLR 6, 1889-1918, 2005.
+
 class SVM(BaseModel):
     # C bounds every alpha (0 <= alpha <= C), kernel is 'linear' | 'poly' | 'rbf' or 'gaussian' (same kernel) | 'sigmoid'
     def __init__(self, C=1.0, kernel="linear", gamma=0.1, degree=3, coef0=1.0, tol=1e-3, max_iter=100000):

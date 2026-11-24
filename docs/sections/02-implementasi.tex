@@ -300,15 +300,18 @@ dan \texttt{gaussian} merujuk ke kernel yang sama.
 	\end{tabular}
 \end{table}
 
-\lstinputlisting[caption={Parameter dan fungsi kernel (\texttt{src/models/svm.py})},linerange={5-5,7-10,12-23,25-28}]{../src/models/svm.py}
+\lstinputlisting[caption={Parameter dan fungsi kernel (\texttt{src/models/svm.py})},linerange={9-9,11-14,16-27,29-32}]{../src/models/svm.py}
 
-\subsection{Sequential Minimal Optimization}
+\subsection{Optimasi dengan \textit{Sequential Minimal Optimization} (Bonus)}
 
-Masalah dual diselesaikan dengan \textit{Sequential Minimal Optimization}
-(SMO). Setiap iterasi SMO hanya mengubah dua variabel, yaitu
+Masalah dual adalah \textit{quadratic programming} dengan $n$ variabel. Pustaka
+\textit{quadratic programming} umum membutuhkan matriks kernel $n\times n$ di
+memori dan biaya komputasi yang tumbuh sangat cepat terhadap $n$. Implementasi
+ini menyelesaikannya dengan \textit{Sequential Minimal Optimization}
+(SMO)~\cite{platt1998smo}. Setiap iterasi SMO hanya mengubah dua variabel, yaitu
 $\alpha_i$ dan $\alpha_j$. Subproblem dua variabel ini dapat diselesaikan secara
 analitik tanpa melanggar $\sum_i\alpha_i y_i=0$. Pasangan $(i,j)$ dipilih dengan
-\textit{second-order working set selection} melalui langkah
+\textit{second-order working set selection}~\cite{fan2005wss} melalui langkah
 berikut.
 \begin{enumerate}
 	\item Untuk setiap sampel, simpan $u_k=\sum_l\alpha_l y_l K(x_l,x_k)$ dan
@@ -336,15 +339,22 @@ Fungsi \texttt{snap} membulatkan nilai $\alpha$ yang sangat dekat dengan 0 atau
 $C$ agar status \textit{bound} tidak berganti-ganti akibat galat
 \textit{floating point}.
 
+Pemilihan pasangan orde dua mengoptimasi pelatihan karena pasangan dipilih
+berdasarkan kenaikan objektif dual yang dihasilkannya, bukan hanya berdasarkan
+pelanggaran KKT terbesar. Pemilihan orde pertama hanya memakai gradien $g$,
+sedangkan pemilihan orde dua juga memakai kelengkungan
+$K_{ii}+K_{jj}-2K_{ij}$, sehingga setiap iterasi menaikkan objektif lebih
+banyak dan jumlah iterasi sampai konvergen lebih sedikit~\cite{fan2005wss}.
+
 Setelah konvergen, bias $b$ dihitung sebagai rata-rata $g_k$ pada \textit{free
 support vector} ($0<\alpha_k<C$) karena sampel tersebut terletak tepat di margin.
 Untuk kernel linear, bobot $w=\sum_i\alpha_i y_i x_i$ disimpan di
 \texttt{coef\_}. Prediksi kernel linear cukup dihitung sebagai $Xw+b$, dan nilai
 $|w|$ dipakai untuk seleksi fitur (Subbab~\ref{sec:seleksi}).
 
-\lstinputlisting[caption={Pelatihan SVM dengan SMO (\texttt{src/models/svm.py})},linerange={30-72}]{../src/models/svm.py}
+\lstinputlisting[caption={Pelatihan SVM dengan SMO (\texttt{src/models/svm.py})},linerange={34-76}]{../src/models/svm.py}
 
-\lstinputlisting[caption={Fungsi keputusan dan prediksi SVM (\texttt{src/models/svm.py})},linerange={75-83}]{../src/models/svm.py}
+\lstinputlisting[caption={Fungsi keputusan dan prediksi SVM (\texttt{src/models/svm.py})},linerange={79-87}]{../src/models/svm.py}
 
 \section{Decision Tree Learning}
 \label{sec:dtl}
