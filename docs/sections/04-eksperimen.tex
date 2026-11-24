@@ -562,12 +562,24 @@ Sebanyak 5.131 di antaranya memiliki $\alpha=C$, yaitu sampel yang berada di
 dalam margin atau salah diklasifikasikan pada data latih. Jumlah ini mengindikasikan
 bahwa kedua kelas banyak beririsan pada ruang fitur.
 
-\todo{Tambahkan hasil \textit{tuning} KNN ($k\in\{5,15,31\}$), Logistic Regression
-($\texttt{lr}\in\{0{,}01;0{,}1\}$), dan DTL ($\texttt{max\_depth}\in\{5,8,\text{None}\}$)
-serta tabel \texttt{ranking} semua model. \textit{Tuning} Bayesian Network ada pada
+Untuk DTL, \textit{grid} pada \textit{notebook} memvariasikan
+$\texttt{ccp\_alpha}\in\{10^{-4},\,2\times10^{-4},\,3\times10^{-4},\,5\times10^{-4}\}$
+dengan \texttt{criterion="gini"} dan pohon tanpa batas kedalaman. Hasil setiap
+nilai beserta pembandingnya, yaitu pohon penuh dan pohon dengan
+\texttt{max\_depth} tetap, ada pada Tabel~\ref{tab:dtl-pruning}. Nilai
+$3\times10^{-4}$ memberikan rata-rata 5-\textit{fold} tertinggi (0,8223) dan
+dipilih sebagai konfigurasi akhir. Dibandingkan pohon tanpa \textit{pruning}
+(0,7982), \textit{tuning} menaikkan \textit{macro F1} 5-\textit{fold} sebesar
+0,0241. Nilai $5\times10^{-4}$ (0,8221) praktis setara karena selisihnya jauh di
+bawah simpangan baku antar-\textit{fold}.
+
+\todo{Tambahkan hasil \textit{tuning} KNN dan Logistic Regression serta tabel
+\texttt{ranking} semua model. \textit{Tuning} Bayesian Network ada pada
 Subbab~\ref{sec:tuning-bn}.}
 
 \section{Analisis Kesalahan}
+
+\subsection{Support Vector Machine}
 
 SVM hasil \textit{tuning} salah memprediksi 765 dari 5.475 baris \texttt{X\_val}
 (14,0\%), terdiri atas 447 \textit{false negative} dan 318 \textit{false
@@ -617,7 +629,83 @@ Agent (36,2\%) dan Offline Agent (30,8\%) tidak jauh berbeda, tetapi pembatalan
 pada Online Travel Agent lebih sulit dipisahkan oleh fitur yang tersedia. Fitur
 tambahan yang membedakan pemesanan pada kanal ini dapat menjadi arah perbaikan.
 
-\todo{Tambahkan \textit{confusion matrix} model lain setelah \textit{tuning}.}
+\subsection{Decision Tree Learning}
+
+DTL hasil \textit{tuning} ($\texttt{ccp\_alpha}=3\times10^{-4}$) dilatih pada
+\texttt{X\_train} dengan varian \textit{preprocessing} \texttt{tree}, lalu diuji
+pada \texttt{X\_val}. \texttt{DTL} \textit{from scratch} dan
+\texttt{DecisionTreeClassifier} menghasilkan prediksi yang identik, sehingga
+\textit{confusion matrix} keduanya sama (Gambar~\ref{fig:cm-dtl}). Model salah
+memprediksi 813 dari 5.475 baris (14,8\%), terdiri atas 481 \textit{false
+negative} dan 332 \textit{false positive}. Model memprediksi 30,0\% baris sebagai
+batal, sedikit di bawah proporsi pembatalan sebenarnya (32,8\%).
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.85\textwidth]{confusion_dtl}
+	\caption[\textit{Confusion matrix} DTL pada \texttt{X\_val}]{\textit{Confusion matrix} DTL \textit{from scratch} (kiri) dan \texttt{DecisionTreeClassifier} (kanan) pada \texttt{X\_val} ($\texttt{ccp\_alpha}=3\times10^{-4}$)}
+	\label{fig:cm-dtl}
+\end{figure}
+
+\begin{table}[H]
+	\centering
+	\caption{\textit{Classification report} DTL pada \texttt{X\_val} (sama untuk \textit{from scratch} dan scikit-learn)}
+	\label{tab:report-dtl}
+	\begin{tabular}{l c c c r}
+		\toprule
+		\textbf{Kelas} & \textbf{\textit{Precision}} & \textbf{\textit{Recall}} & \textbf{F1} & \textbf{\textit{Support}} \\
+		\midrule
+		0 (tidak batal) & 0,8744 & 0,9098 & 0,8918 & 3.681 \\
+		1 (batal)       & 0,7982 & 0,7319 & 0,7636 & 1.794 \\
+		\midrule
+		\textit{Accuracy}     & \multicolumn{3}{c}{0,8515} & 5.475 \\
+		\textit{Macro avg}    & 0,8363 & 0,8208 & 0,8277 & 5.475 \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+Seperti pada SVM, kesalahan DTL berada di antara kedua kelas. Median
+\textit{lead time} kelompok TP adalah 164 hari dan TN 34 hari, sedangkan FN 62 hari
+dan FP 74 hari. Proporsi pemesanan tanpa permintaan khusus adalah 69,9\% pada TP
+dan 34,6\% pada TN, sedangkan pada FP 69,9\% dan pada FN 41,4\%. Pemesanan yang
+salah diprediksi batal memiliki ciri yang sama dengan pembatalan, dan pembatalan
+yang terlewat memiliki ciri yang mirip dengan pemesanan yang tidak batal.
+
+\begin{table}[H]
+	\centering
+	\caption{Tingkat kesalahan DTL pada \texttt{X\_val} berdasarkan \textit{lead time}}
+	\label{tab:error-lead-dtl}
+	\begin{tabular}{l r c c r r}
+		\toprule
+		\textbf{\textit{Lead time} (hari)} & \textbf{Baris} & \textbf{Rasio batal} & \textbf{Tingkat kesalahan} & \textbf{FN} & \textbf{FP} \\
+		\midrule
+		0-7     & 836   & 0,091 & 0,073 & 57  & 4 \\
+		8-30    & 1.005 & 0,193 & 0,152 & 100 & 53 \\
+		31-90   & 1.511 & 0,251 & 0,169 & 138 & 117 \\
+		91-180  & 1.129 & 0,447 & 0,202 & 129 & 99 \\
+		$>180$  & 769   & 0,740 & 0,074 & 19  & 38 \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+Tabel~\ref{tab:error-lead-dtl} dihitung dari \textit{lead time} mentah. Sebanyak
+225 baris dengan \textit{lead time} kosong tidak masuk ke tabel ini. Tingkat
+kesalahan tertinggi (20,2\%) terjadi pada \textit{lead time} 91-180 hari, rentang
+dengan rasio pembatalan paling dekat dengan 50\%. Arah kesalahan mengikuti kelas
+mayoritas setiap rentang. Pada \textit{lead time} 0-7 hari, model hampir tidak
+pernah memprediksi batal (4 FP) dan melewatkan 57 pembatalan. Pada \textit{lead
+time} lebih dari 180 hari, FP (38) justru lebih banyak daripada FN (19). Hal ini
+sesuai dengan cara daun DTL memprediksi: setiap daun memilih kelas mayoritas
+sampel latih di dalamnya. Pada segmen yang hampir seluruhnya satu kelas,
+pemesanan dari kelas minoritas ikut diprediksi sebagai kelas mayoritas.
+
+Tingkat kesalahan per kanal pemesanan juga berpola sama dengan SVM. Tingkat
+kesalahan pada Online Travel Agent adalah 17,8\% (3.509 baris, rasio batal
+36,8\%), sedangkan pada Offline Agent 10,1\% (1.580 baris, rasio batal 29,8\%)
+dan pada Corporate 9,3\% (300 baris). Seluruh 76 pemesanan Complimentary
+diprediksi benar karena tidak ada satu pun yang batal.
+
+\todo{Tambahkan \textit{confusion matrix} KNN dan Logistic Regression setelah \textit{tuning}.}
 
 \section{Prediksi Data Uji}
 
