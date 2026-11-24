@@ -7,9 +7,9 @@ Setiap model dievaluasi dengan \textit{macro F1-score} melalui dua cara berikut.
 	\item \textit{Stratified 5-fold cross validation}: model dievaluasi pada
 	\texttt{X\_train}, lalu rata-rata dan simpangan baku kelima \textit{fold}
 	dilaporkan. Grid notebook menggunakan matriks fitur yang sudah disiapkan
-	sebelum pembagian internal ini. Untuk SVM, sebagian fitur dihitung dari
-	label data latih, sehingga skor grid dapat dipengaruhi informasi dari
-	lipatan validasi internal. Skor \textit{hold-out} memakai transformasi
+	sebelum pembagian internal ini. Fitur seperti \texttt{date\_rate} dan
+	\textit{target encoding} SVM dihitung dari label data latih, sehingga
+	skor grid dapat dipengaruhi informasi dari lipatan validasi internal. Skor \textit{hold-out} memakai transformasi
 	yang dipelajari hanya dari data latih. Eksperimen ablasi pada Bab~3
 	melatih ulang \textit{preprocessor} di setiap lipatan.
 \end{enumerate}
@@ -24,20 +24,20 @@ implementasinya.
 
 \begin{table}[H]
 	\centering
-	\caption{\textit{Macro F1} model \textit{from scratch} dan scikit-learn}
+	\caption{\textit{Macro F1} konfigurasi dasar dari output notebook}
 	\label{tab:perbandingan}
 	\small
 	\begin{tabular}{p{3.3cm} l c c c}
 		\toprule
 		\textbf{Algoritma} & \textbf{Implementasi} & \textbf{\textit{Hold-out}} & \textbf{5-\textit{fold} $\mu$} & \textbf{5-\textit{fold} $\sigma$} \\
 		\midrule
-		SVM (RBF, $C=3$, $\gamma=0{,}1$)
-		  & \textit{from scratch} & 0,8384 & 0,8328 & 0,0062 \\
-		  & \texttt{SVC} & 0,8384 & 0,8328 & 0,0061 \\
+		SVM (RBF, $C=2$, $\gamma=0{,}025$)
+		  & \textit{from scratch} & 0,8688 & 0,8645 & 0,0037 \\
+		  & \texttt{SVC} & 0,8688 & 0,8645 & 0,0038 \\
 		\midrule
 		KNN
 		  & \textit{from scratch} ($k=91$) & 0,8423 & 0,8382 & 0,0051 \\
-		  & \texttt{KNeighborsClassifier} & 0,8152 & 0,8069 & 0,0052 \\
+		  & \texttt{KNeighborsClassifier} & 0,8197 & 0,8172 & 0,0057 \\
 		\midrule
 		Logistic Regression
 		  & \textit{from scratch} & 0,7597 & 0,6861 & 0,0397 \\
@@ -45,7 +45,7 @@ implementasinya.
 		\midrule
 		DTL (CART, \texttt{ccp\_alpha} $=3\times10^{-4}$)
 		  & \textit{from scratch} & 0,8277 & 0,8223 & 0,0070 \\
-		  & \texttt{DecisionTreeClassifier} & 0,8277 & 0,8223 & 0,0071 \\
+		  & \texttt{DecisionTreeClassifier} & 0,8273 & 0,8221 & 0,0071 \\
 		\midrule
 		Bayes
 		  & \textit{from scratch} (NB) & 0,7050 & 0,7093 & 0,0061 \\
@@ -56,10 +56,9 @@ implementasinya.
 	\end{tabular}
 \end{table}
 
-Skor KNN pada tabel ini dihitung dari konfigurasi notebook terbaru. Angka
-algoritma lain berasal dari eksperimen yang telah terdokumentasi sebelumnya;
-khusus SVM, baris $C=3$ dan $\gamma=0{,}1$ adalah eksperimen lanjutan.
-Implementasi \textit{from scratch} memakai \textit{stochastic gradient ascent}
+Angka pada tabel berasal dari output \textit{Comparison with scikit-learn}
+di notebook. Baris TAN berasal dari output eksperimen varian Bayesian Network.
+Logistic Regression \textit{from scratch} memakai \textit{stochastic gradient ascent}
 tanpa regularisasi, sedangkan \texttt{LogisticRegression} scikit-learn memakai
 regularisasi L2 bawaan. Karena itu, tabel ini membandingkan konfigurasi dasar,
 bukan dua model dengan \textit{hyperparameter} yang identik. Eksperimen fitur
@@ -75,80 +74,50 @@ ditafsirkan sebagai selisih implementasi algoritma semata.
 
 \subsection{Kebenaran Implementasi}
 
-SVM \textit{from scratch} dan \texttt{SVC} menghasilkan \textit{macro F1} yang sama
-hingga empat angka desimal, baik pada \textit{hold-out} (0,8384) maupun pada
-rata-rata 5-\textit{fold} (0,8328). Prediksi keduanya pada \texttt{X\_val} juga
-menghasilkan \textit{confusion matrix} dan \textit{classification report} yang sama
-(Gambar~\ref{fig:cm-svm} dan Tabel~\ref{tab:report-svm}). \texttt{SVC} dibangun di
-atas LIBSVM, yang juga menyelesaikan masalah dual dengan SMO dan
-\textit{second-order working set selection}. Dengan toleransi KKT
-$10^{-3}$ pada keduanya, kedua implementasi menghasilkan pemisah yang memberikan
-prediksi identik pada data validasi.
+Pada konfigurasi dasar ($C=2$, $\gamma=0{,}025$), SVM \textit{from scratch}
+dan \texttt{SVC} menghasilkan \textit{macro F1} yang sama hingga empat angka
+desimal, yaitu 0,8688 pada \textit{hold-out} dan 0,8645 pada rata-rata
+5-\textit{fold}. Pada notebook, \texttt{SVC} dan SVM \textit{from scratch}
+memakai 61 fitur pada varian \texttt{svm} dan toleransi $10^{-3}$.
 
-\begin{figure}[H]
-	\centering
-	\includegraphics[width=0.85\textwidth]{confusion_svm}
-	\caption{\textit{Confusion matrix} SVM \textit{from scratch} (kiri) dan \texttt{SVC} (kanan) pada \texttt{X\_val}}
-	\label{fig:cm-svm}
-\end{figure}
+\subsection{Analisis Model Hasil \textit{Tuning}}
+
+SVM \textit{from scratch} hasil \textit{tuning} ($C=2$, $\gamma=0{,}035$)
+mencapai \textit{macro F1} 0,8671 pada \textit{hold-out}. Rata-rata
+5-\textit{fold} adalah 0,8646 dengan simpangan baku 0,0039. Dari 1.794
+pemesanan yang batal, model mendeteksi 1.407 (\textit{recall} 78,4\%)
+dan melewatkan 387. F1 kelas batal (0,8178) lebih rendah daripada F1 kelas
+tidak batal (0,9165).
 
 \begin{table}[H]
 	\centering
-	\caption{\textit{Classification report} SVM pada \texttt{X\_val} (sama untuk \textit{from scratch} dan \texttt{SVC})}
+	\caption{\textit{Classification report} SVM \textit{from scratch} hasil \textit{tuning} pada \texttt{X\_val}}
 	\label{tab:report-svm}
 	\begin{tabular}{l c c c r}
 		\toprule
 		\textbf{Kelas} & \textbf{\textit{Precision}} & \textbf{\textit{Recall}} & \textbf{F1} & \textbf{\textit{Support}} \\
 		\midrule
-		0 (tidak batal) & 0,8827 & 0,9136 & 0,8979 & 3.681 \\
-		1 (batal)       & 0,8090 & 0,7508 & 0,7788 & 1.794 \\
+		0 (tidak batal) & 0,8989 & 0,9348 & 0,9165 & 3.681 \\
+		1 (batal)       & 0,8543 & 0,7843 & 0,8178 & 1.794 \\
 		\midrule
-		\textit{Accuracy}     & \multicolumn{3}{c}{0,8603} & 5.475 \\
-		\textit{Macro avg}    & 0,8458 & 0,8322 & 0,8384 & 5.475 \\
+		\textit{Accuracy}  & \multicolumn{3}{c}{0,8855} & 5.475 \\
+		\textit{Macro avg} & 0,8766 & 0,8595 & 0,8671 & 5.475 \\
 		\bottomrule
 	\end{tabular}
 \end{table}
 
-\subsection{Analisis}
-
-Dari 1.794 pembatalan pada \texttt{X\_val}, SVM mendeteksi 1.347 pembatalan
-(\textit{recall} 75\%) dan melewatkan 447 pembatalan (\textit{false negative}).
-Sebanyak 318 pemesanan yang tidak batal salah diprediksi batal (\textit{false
-positive}). F1 kelas batal (0,78) lebih rendah daripada F1 kelas tidak batal
-(0,90). Kelas batal juga merupakan kelas yang jumlah sampelnya lebih sedikit.
-
-Simpangan baku antar-\textit{fold} kecil (0,006), dan skor \textit{hold-out} dekat
-dengan rata-rata \textit{k-fold}. Kinerja SVM tidak bergantung pada satu cara
-pembagian data tertentu.
-
-SVM RBF memperoleh \textit{macro F1} 0,8384, sedangkan Logistic Regression
-scikit-learn pada varian fitur \texttt{lr} memperoleh 0,8017. Karena kedua model
-menggunakan varian \textit{preprocessing} yang berbeda, selisih ini tidak dapat
-diatribusikan hanya pada bentuk batas keputusan; rekayasa fitur dan model juga
-berbeda.
-
-\texttt{GaussianNB} hanya mencapai 0,3773. Model ini mengasumsikan setiap fitur
-berdistribusi normal dan saling bebas jika kelasnya diketahui. Banyak fitur pada
-data ini berupa kolom \textit{one-hot} atau fitur diskret yang hampir konstan.
-Kemungkinan penyebabnya adalah variansi yang sangat kecil pada fitur-fitur
-tersebut sehingga \textit{likelihood}-nya mendominasi posterior. Dugaan ini belum
-diuji.
-
 \subsection{Seleksi Fitur SVM}
 \label{sec:hasil-svm-seleksi}
 
-SVM linear ($C=0{,}1$) yang dilatih dengan tiga puluh fitur menghasilkan sepuluh
-fitur dengan $|w|$ terbesar. Urutannya dari yang terbesar adalah
-\texttt{special\_requests}, \texttt{days\_before\_arrival}, \texttt{date\_rate},
-\texttt{lead\_x\_price}, \texttt{booking\_channel\_Online Travel Agent},
-\texttt{booking\_channel\_Offline Agent}, \texttt{booking\_channel\_Complimentary},
-\texttt{needs\_parking}, \texttt{is\_returning\_guest}, dan \texttt{doy\_cos}.
-Dua fitur teratas sama dengan dua fitur yang nilai mutlak korelasinya terhadap
-target paling besar pada Bab~1. Dua fitur hasil rekayasa, yaitu \texttt{date\_rate} dan
-\texttt{lead\_x\_price}, berada di peringkat ketiga dan keempat.
+Notebook memakai SVM linear ($C=0{,}1$) pada 30 fitur varian \texttt{default}
+untuk mengurutkan fitur berdasarkan $|w|$. Sepuluh fitur teratas secara berurutan
+adalah \texttt{needs\_parking}, \texttt{special\_requests}, kanal Offline Agent,
+\texttt{days\_before\_arrival}, kanal Online Travel Agent,
+\texttt{is\_returning\_guest}, \texttt{date\_rate}, kanal Airline,
+\texttt{lead\_x\_price}, dan kanal Complimentary.
 
-Untuk melihat apakah seleksi fitur dan reduksi dimensi membantu, SVM RBF ($C=3$,
-$\gamma=0{,}1$) dilatih dengan empat variasi masukan (Tabel~\ref{tab:seleksi}).
+Pada eksperimen terdahulu, SVM RBF ($C=3$, $\gamma=0{,}1$) dilatih dengan
+empat variasi masukan untuk menguji seleksi fitur dan PCA (Tabel~\ref{tab:seleksi}).
 SVM RBF tidak memiliki bobot $w$ sehingga \texttt{Pipeline(select=k)} tidak dapat
 meranking fiturnya sendiri. Karena itu, pada varian top-$k$, peringkat fitur
 diambil dari $|w|$ SVM linear ($C=0{,}1$), lalu SVM RBF dilatih dengan $k$ fitur
@@ -160,7 +129,7 @@ dan dengan \texttt{Pipeline(select=10)}.
 
 \begin{table}[H]
 	\centering
-	\caption{Pengaruh seleksi fitur dan PCA pada SVM}
+	\caption{Eksperimen terdahulu tentang seleksi fitur dan PCA pada SVM}
 	\label{tab:seleksi}
 	\begin{tabular}{l l c c c}
 		\toprule
@@ -187,9 +156,9 @@ karena peringkatnya berasal dari model yang sama.
 
 PCA dengan 21 komponen menghasilkan skor yang hampir sama dengan tiga puluh fitur
 asli. Selisih rata-ratanya (0,0023) lebih kecil daripada simpangan baku
-antar-\textit{fold} (0,0062). PCA mengurangi dimensi masukan sepertiga tanpa
-penurunan skor yang berarti, tetapi juga tidak menaikkan skor. Karena itu, model
-akhir tetap memakai tiga puluh fitur tanpa seleksi dan tanpa PCA.
+antar-\textit{fold} (0,0062). PCA mengurangi jumlah fitur dari 30 menjadi 21 dengan perubahan skor yang
+relatif kecil pada eksperimen itu. SVM RBF di notebook saat ini memakai varian
+\texttt{svm} dengan 61 fitur, tanpa seleksi ataupun PCA.
 
 \section{Hasil Decision Tree Learning}
 \label{sec:hasil-dtl}
@@ -200,23 +169,11 @@ Semua percobaan pada subbab ini memakai \texttt{DTL} dengan
 
 \subsection{Kebenaran Implementasi}
 
-\texttt{DTL} dibandingkan dengan \texttt{DecisionTreeClassifier} scikit-learn
-pada data dan parameter yang sama.
-\begin{itemize}
-	\item Dengan \texttt{criterion="gini"} dan \texttt{max\_depth} $=10$, prediksi
-	kedua model sama pada 99,4\% baris \texttt{X\_val}. \textit{Macro F1}
-	\textit{hold-out} adalah 0,8292 untuk \texttt{DTL} dan 0,8287 untuk
-	scikit-learn. Perbedaan ini berasal dari cara memilih di antara pemisahan yang
-	\textit{gain}-nya sama. Scikit-learn mengacak urutan fitur, sedangkan
-	\texttt{DTL} memilih fitur dengan indeks terkecil sehingga hasilnya selalu sama.
-	\item Dengan \texttt{ccp\_alpha} $=3\times10^{-4}$ dan $10^{-3}$, kedua
-	implementasi menghasilkan pohon dengan jumlah daun yang sama (122 dan 29) dan
-	prediksi yang identik pada seluruh \texttt{X\_val}. Pada $\alpha$ yang lebih
-	kecil, misalnya $10^{-4}$, jumlah daunnya sedikit berbeda (697 dan 679) karena
-	pohon penuhnya sudah berbeda akibat pemilihan di antara pemisahan yang
-	\textit{gain}-nya sama (2.526 dan 2.534 daun).
-\end{itemize}
-
+Pada data dan parameter yang sama, \texttt{DTL} \textit{from scratch}
+mencapai \textit{macro F1} \textit{hold-out} 0,8277 dan rata-rata
+5-\textit{fold} 0,8223. \texttt{DecisionTreeClassifier} scikit-learn
+mencapai 0,8273 dan 0,8221. Keduanya memakai \texttt{criterion="gini"}
+dan \texttt{ccp\_alpha} $=3\times10^{-4}$.
 
 \subsection{\textit{Cost-Complexity Pruning} Dibandingkan Batas Kedalaman}
 
@@ -234,14 +191,10 @@ dengan \textit{grid search} 5-\textit{fold} pada \textit{notebook}.
 		\textbf{Konfigurasi} & \textbf{Daun} & \textbf{\textit{Hold-out}} & \textbf{5-\textit{fold} $\mu$} & \textbf{5-\textit{fold} $\sigma$} \\
 		\midrule
 		Pohon penuh                                  & 2.526 & 0,8042 & 0,7982 & 0,0024 \\
-		\texttt{max\_depth} $=8$                      & 172   & 0,8261 & 0,8200 & 0,0047 \\
 		\texttt{max\_depth} $=10$                     & 394   & 0,8292 & 0,8205 & 0,0056 \\
-		\texttt{max\_depth} $=12$                     & 741   & 0,8287 & 0,8187 & 0,0062 \\
 		\midrule
 		\texttt{ccp\_alpha} $=10^{-4}$                & 697   & 0,8252 & 0,8096 & 0,0020 \\
-		\texttt{ccp\_alpha} $=2\times10^{-4}$         & 183   & 0,8295 & 0,8168 & 0,0042 \\
 		\texttt{ccp\_alpha} $=3\times10^{-4}$         & 122   & 0,8277 & \textbf{0,8223} & 0,0070 \\
-		\texttt{ccp\_alpha} $=5\times10^{-4}$         & 55    & 0,8223 & 0,8221 & 0,0032 \\
 		\texttt{ccp\_alpha} $=10^{-3}$                & 29    & 0,8093 & 0,8099 & 0,0039 \\
 		\bottomrule
 	\end{tabular}
@@ -261,58 +214,38 @@ daripada simpangan baku keduanya. Keunggulan \textit{pruning} adalah ukuran poho
 Dengan skor yang setara, pohonnya tiga kali lebih kecil (122 dan 394 daun), karena
 setiap cabang dipangkas sesuai kontribusinya, bukan dipotong pada kedalaman yang
 sama. Nilai $\alpha=3\times10^{-4}$ dipilih karena rata-rata 5-\textit{fold}-nya
-tertinggi. Nilai $5\times10^{-4}$ praktis setara dengan pohon yang lebih kecil lagi
-(55 daun).
-
-Kriteria entropi dengan \texttt{max\_depth} $=10$ memberi 0,8355 pada
-\textit{hold-out} dan 0,8219 pada 5-\textit{fold}, setara dengan \textit{gini}
-(0,8292 dan 0,8205) karena selisih 5-\textit{fold}-nya di bawah simpangan baku.
-Model akhir memakai \textit{gini} sesuai CART.
+tertinggi. Model akhir memakai \textit{gini} sesuai CART.
 
 \subsection{Nilai Hilang dan Atribut Kategorikal}
 
-Tabel~\ref{tab:dtl-missing} membandingkan DTL ($\texttt{ccp\_alpha}=3\times10^{-4}$)
-pada tiga bentuk data. Pada data mentah, tiga kolom kategorikal tetap berupa
-teks dan delapan kolom tetap berisi nilai kosong (10.677 sel pada
-\texttt{X\_train}). Baris kedua memakai varian \texttt{tree}, tetapi nilai yang
-semula kosong pada kolom asli dikembalikan menjadi kosong. Dengan cara ini,
-selisih baris kedua dan ketiga hanya berasal dari cara menangani nilai kosong.
+Tabel~\ref{tab:dtl-missing} membandingkan DTL
+($\texttt{ccp\_alpha}=3\times10^{-4}$) pada data mentah dan varian
+\texttt{tree}. Pada data mentah, tiga kolom kategorikal tetap berupa teks
+dan \texttt{X\_train} masih berisi 10.677 nilai kosong.
 
 \begin{table}[H]
 	\centering
-	\caption{DTL pada data dengan nilai kosong dan atribut kategorikal (\textit{macro F1})}
+	\caption{DTL pada data mentah dan varian \texttt{tree} (\textit{macro F1})}
 	\label{tab:dtl-missing}
-	\begin{tabular}{l r c c c}
+	\begin{tabular}{l c c c}
 		\toprule
-		\textbf{Data} & \textbf{Daun} & \textbf{\textit{Hold-out}} & \textbf{5-\textit{fold} $\mu$} & \textbf{5-\textit{fold} $\sigma$} \\
+		\textbf{Data} & \textbf{\textit{Hold-out}} & \textbf{5-\textit{fold} $\mu$} & \textbf{5-\textit{fold} $\sigma$} \\
 		\midrule
-		Data mentah (teks, nilai kosong)               & 104 & 0,8145 & 0,8094 & 0,0030 \\
-		\texttt{tree}, nilai kosong dipertahankan       & 112 & 0,8169 & 0,8133 & 0,0035 \\
-		\texttt{tree} (imputasi)                        & 122 & 0,8277 & \textbf{0,8223} & 0,0070 \\
+		Data mentah (teks, nilai kosong) & 0,8145 & 0,8094 & 0,0030 \\
+		\texttt{tree} & 0,8277 & \textbf{0,8223} & 0,0070 \\
 		\bottomrule
 	\end{tabular}
 \end{table}
 
-DTL dapat dilatih dan memprediksi langsung pada data mentah. Akar pohonnya sama
-dengan akar pohon pada data hasil \textit{preprocessing}, yaitu
-\texttt{days\_before\_arrival} $\le 149{,}5$, dan baris dengan
-\texttt{days\_before\_arrival} kosong dikirim ke cabang kiri. Selisih data mentah
-dengan baris kedua (0,0039) berasal dari fitur tambahan pada varian \texttt{tree},
-misalnya \texttt{date\_rate} dan \texttt{lead\_x\_price}.
-
-Imputasi median kelompok memberi skor 0,0090 lebih tinggi daripada penanganan
-nilai kosong di dalam pohon. Selisih ini sedikit di atas simpangan baku terbesar
-(0,0070). Kemungkinan penyebabnya, imputasi harga dan \textit{lead time} memakai
-median per kelompok (\texttt{room\_category}, \texttt{booking\_channel}, dan
-\texttt{arrival\_month}), sehingga nilai pengganti memakai informasi dari kolom
-lain. Di dalam pohon, baris kosong hanya mengikuti cabang yang lebih besar. Dugaan
-ini belum diuji secara terpisah. Karena itu, model akhir tetap memakai varian
-\texttt{tree} dengan imputasi.
+DTL berhasil dilatih dan memprediksi pada kedua bentuk data. Varian
+\texttt{tree} meningkatkan skor sebesar 0,0132 pada \textit{hold-out} dan
+0,0129 pada 5-\textit{fold}. Selisih ini mencakup pengaruh imputasi,
+\textit{encoding} dan fitur turunan yang dipakai bersama.
 
 \subsection{Gambar Percabangan Pohon (Bonus)}
 
-Fungsi \texttt{plot\_tree(model, feature\_names, top\_n, path)} di
-\texttt{src/models/dtl.py} menggambar \texttt{top\_n} level percabangan teratas
+Fungsi \texttt{plot\_tree} di \texttt{src/models/dtl.py} menggambar
+\texttt{top\_n} level percabangan teratas
 pohon (Gambar~\ref{fig:dtl-tree}). Cabang yang lebih dalam ditampilkan sebagai
 ``\dots''. Setiap simpul menampilkan fitur, ambang atau himpunan kategori, dan arah
 nilai kosong.
@@ -329,10 +262,10 @@ dengan fitur yang korelasinya terhadap target paling besar (Bab~1). Pada cabang
 \textit{lead time} pendek, pohon memakai \texttt{special\_requests} dan kanal Online
 Travel Agent. Pada cabang \textit{lead time} panjang, pohon memakai
 \texttt{lead\_x\_price}, \texttt{date\_rate}, dan \texttt{arrival\_month}. Lima fitur
-dengan \texttt{feature\_importances\_} terbesar pada pohon ini adalah
-\texttt{days\_before\_arrival} (0,332), \texttt{lead\_x\_price} (0,157),
-\texttt{booking\_channel} Online Travel Agent (0,130), \texttt{special\_requests}
-(0,113), dan \texttt{date\_rate} (0,086).
+dengan \texttt{feature\_importances\_} terbesar pada pohon scikit-learn
+di notebook adalah \texttt{days\_before\_arrival} (0,3317),
+\texttt{lead\_x\_price} (0,1643), kanal Online Travel Agent (0,1302),
+\texttt{special\_requests} (0,1126), dan \texttt{date\_rate} (0,0857).
 
 \section{Hasil Bayesian Network}
 \label{sec:hasil-bn}
@@ -413,8 +346,10 @@ latih ini belum menimbulkan masalah yang terlihat.
 \label{sec:hasil-kdb}
 
 KDB (Subbab~\ref{sec:kdb}) dievaluasi dengan diskretisasi dan 5 \textit{bin}
-yang sama, sehingga satu-satunya perbedaan dengan TAN adalah jumlah
-\textit{parent} fitur. Tabel~\ref{tab:kdb} menunjukkan pengaruh $k$.
+yang sama, dengan struktur yang mengizinkan lebih banyak \textit{parent}.
+Tabel~\ref{tab:kdb} memperlihatkan eksperimen terdahulu yang menyapu nilai $k$
+lebih luas. Hasil KDB $k=10$ pada notebook adalah 0,8112 pada \textit{hold-out}
+dan 0,8124 pada 5-\textit{fold}.
 
 \begin{table}[H]
 	\centering
@@ -555,7 +490,7 @@ kernel RBF. Hasil 20 pelatihan (empat kombinasi $\times$ lima
 
 \begin{table}[H]
 	\centering
-	\caption{Hasil \textit{tuning} SVM RBF pada notebook terbaru}
+	\caption{Hasil \textit{tuning} SVM RBF dari \texttt{svm\_report\_grid.csv}}
 	\label{tab:tuning-svm}
 	\begin{tabular}{c c c c}
 		\toprule
@@ -573,21 +508,17 @@ Nilai $C=2$ dan $\gamma=0{,}035$ memberi rata-rata tertinggi (0,8646).
 Selisihnya dari $\gamma=0{,}025$ pada $C$ yang sama hanya 0,0001, jauh
 lebih kecil daripada simpangan baku antar-\textit{fold}; kedua kombinasi
 praktis setara pada data ini. Model terpilih mencapai \textit{macro F1}
-0,8674 pada \textit{hold-out}. Eksperimen SVM terdahulu dengan $C=3$ dan
+0,8671 pada \textit{hold-out}. Eksperimen SVM terdahulu dengan $C=3$ dan
 $\gamma=0{,}1$ menghasilkan 0,8328 pada representasi fitur sebelumnya.
 Karena konfigurasi fitur juga berubah, kedua angka tersebut tidak dipakai
 untuk menyimpulkan pengaruh $C$ atau $\gamma$ secara terpisah.
 
 Untuk DTL, \textit{grid} pada \textit{notebook} memvariasikan
 $\texttt{ccp\_alpha}\in\{10^{-4},\,2\times10^{-4},\,3\times10^{-4},\,5\times10^{-4}\}$
-dengan \texttt{criterion="gini"} dan pohon tanpa batas kedalaman. Hasil setiap
-nilai beserta pembandingnya, yaitu pohon penuh dan pohon dengan
-\texttt{max\_depth} tetap, ada pada Tabel~\ref{tab:dtl-pruning}. Nilai
-$3\times10^{-4}$ memberikan rata-rata 5-\textit{fold} tertinggi (0,8223) dan
-dipilih sebagai konfigurasi akhir. Dibandingkan pohon tanpa \textit{pruning}
-(0,7982), \textit{tuning} menaikkan \textit{macro F1} 5-\textit{fold} sebesar
-0,0241. Nilai $5\times10^{-4}$ (0,8221) praktis setara karena selisihnya jauh di
-bawah simpangan baku antar-\textit{fold}.
+dengan \texttt{criterion="gini"} dan pohon tanpa batas kedalaman. Nilai
+$3\times10^{-4}$ terpilih dengan rata-rata 5-\textit{fold} 0,8223.
+Tabel~\ref{tab:dtl-pruning} merangkum hasil eksperimen pembanding yang
+ditampilkan di notebook.
 
 \textit{Grid} Logistic Regression memvariasikan laju belajar
 $\texttt{lr}\in\{0{,}1,0{,}5\}$ dan jumlah pembaruan satu sampel
@@ -596,7 +527,7 @@ rata-rata dan simpangan baku \textit{macro F1} pada lima \textit{fold}.
 
 \begin{table}[H]
 \centering
-\caption{Hasil \textit{tuning} Logistic Regression \textit{from scratch}}
+\caption{\textit{Grid search} Logistic Regression \textit{from scratch}}
 \label{tab:tuning-lr}
 \begin{tabular}{c c c c}
 \toprule
@@ -634,26 +565,24 @@ dasar tersebut.
 	\label{fig:knn-tuning}
 \end{figure}
 
-Tabel~\ref{tab:ranking-model} merangkum konfigurasi terbaik yang hasil
-5-\textit{fold}-nya tersedia untuk setiap algoritma \textit{from scratch}.
-SVM pada peringkat memakai konfigurasi terbaik dari grid notebook terbaru
-(Tabel~\ref{tab:tuning-svm}); nilai model lain mengikuti eksperimen pada
-subbab masing-masing.
+Tabel~\ref{tab:ranking-model} menyalin peringkat enam model dari output
+\textit{ranking} setelah \textit{tuning} di notebook.
 
 \begin{table}[H]
 	\centering
 	\caption{Peringkat konfigurasi model \textit{from scratch} berdasarkan rata-rata \textit{macro F1} 5-\textit{fold}}
 	\label{tab:ranking-model}
 	\small
-	\begin{tabular}{c l c c}
+	\begin{tabular}{c l c c c}
 		\toprule
-		\textbf{Peringkat} & \textbf{Model} & \textbf{Rata-rata} & \textbf{Simpangan baku} \\
+		\textbf{Peringkat} & \textbf{Model} & \textbf{\textit{Hold-out}} & \textbf{5-\textit{fold} $\mu$} & \textbf{5-\textit{fold} $\sigma$} \\
 		\midrule
-		1 & SVM RBF ($C=2$, $\gamma=0{,}035$) & 0,8646 & 0,0039 \\
-		2 & KNN ($k=71$, ambang 0,46) & 0,8388 & 0,0034 \\
-		3 & DTL ($\texttt{ccp\_alpha}=3\times10^{-4}$) & 0,8223 & 0,0070 \\
-		4 & Bayesian Network (KDB, $k=10$) & 0,8124 & 0,0029 \\
-		5 & Logistic Regression dasar & 0,7274 & 0,0154 \\
+		1 & SVM RBF ($C=2$, $\gamma=0{,}035$) & 0,8671 & 0,8646 & 0,0039 \\
+		2 & KNN ($k=71$, ambang 0,46) & 0,8410 & 0,8388 & 0,0034 \\
+		3 & DTL ($\texttt{ccp\_alpha}=3\times10^{-4}$) & 0,8277 & 0,8223 & 0,0070 \\
+		4 & Bayesian Network (KDB, $k=10$) & 0,8112 & 0,8124 & 0,0029 \\
+		5 & Logistic Regression & 0,7567 & 0,7274 & 0,0154 \\
+		6 & \textit{Naive Bayes} & 0,7092 & 0,7134 & 0,0063 \\
 		\bottomrule
 	\end{tabular}
 \end{table}
@@ -679,13 +608,14 @@ tertinggi sekaligus \textit{log-loss} terendah pada pembagian ini.
 \midrule
 \textit{Batch gradient descent} & 0,8420 & 0,8606 & 0,3115 & 1.500 & Tidak \\
 \textit{Mini-batch} SGD & 0,8424 & 0,8608 & 0,3115 & 120 \textit{epoch} & Tidak \\
-L-BFGS & \textbf{0,8499} & \textbf{0,8685} & \textbf{0,2911} & 906 & Ya \\
+L-BFGS & \textbf{0,8498} & \textbf{0,8683} & \textbf{0,2910} & 853 & Ya \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Pada data validasi yang sama, L-BFGS menaikkan \textit{macro F1} sebesar 0,0076
-dari \textit{mini-batch} SGD dan 0,0080 dari \textit{batch gradient descent}.
+Berdasarkan output tersimpan di notebook, L-BFGS menaikkan
+\textit{macro F1} sebesar 0,0074 dari \textit{mini-batch} SGD dan 0,0078
+dari \textit{batch gradient descent}.
 L-BFGS berhenti setelah toleransi perubahan fungsi tercapai. Dua metode gradien
 lainnya mencapai batas iterasi atau \textit{epoch} yang ditetapkan; skor
 \textit{mini-batch} SGD memakai parameter dengan nilai objektif terbaik selama
@@ -700,77 +630,36 @@ berkas L-BFGS tercantum pada Subbab~\ref{sec:prediksi-uji}.
 
 \section{Analisis Kesalahan}
 
-\subsection{Support Vector Machine}
-
-SVM hasil \textit{tuning} salah memprediksi 765 dari 5.475 baris \texttt{X\_val}
-(14,0\%), terdiri atas 447 \textit{false negative} dan 318 \textit{false
-positive} (Gambar~\ref{fig:cm-svm}). Jumlah \textit{false negative} yang lebih
-besar sesuai dengan proporsi prediksi batal: model memprediksi 30,4\% baris
-\texttt{X\_val} sebagai batal, sedangkan proporsi pembatalan sebenarnya 32,8\%.
-
-Untuk mencari pola kesalahan, baris \texttt{X\_val} dikelompokkan menjadi
-\textit{true positive} (TP), \textit{true negative} (TN), \textit{false positive}
-(FP), dan \textit{false negative} (FN), lalu nilai fitur aslinya dibandingkan.
-Median \textit{lead time} kelompok TP adalah 161 hari dan kelompok TN 37 hari.
-Kesalahan berada di antara keduanya: median FN 62 hari dan median FP 80 hari.
-Pola yang sama terlihat pada permintaan khusus. Proporsi pemesanan tanpa
-permintaan khusus adalah 68,6\% pada TP dan 37,8\% pada TN, sedangkan pada FP
-61,3\% dan pada FN 42,3\%. Dengan kata lain, pembatalan yang terlewat (FN) memiliki
-ciri yang mirip dengan pemesanan yang tidak batal, dan pemesanan yang salah
-diprediksi batal (FP) memiliki ciri yang mirip dengan pembatalan.
-
-\begin{table}[H]
-	\centering
-	\caption{Tingkat kesalahan SVM pada \texttt{X\_val} berdasarkan \textit{lead time}}
-	\label{tab:error-lead}
-	\begin{tabular}{l r c c r r}
-		\toprule
-		\textbf{\textit{Lead time} (hari)} & \textbf{Baris} & \textbf{Rasio batal} & \textbf{Tingkat kesalahan} & \textbf{FN} & \textbf{FP} \\
-		\midrule
-		0-7     & 802   & 0,086 & 0,072 & 42  & 16 \\
-		8-30    & 965   & 0,181 & 0,123 & 71  & 48 \\
-		31-90   & 1.562 & 0,256 & 0,159 & 149 & 99 \\
-		91-180  & 1.133 & 0,457 & 0,211 & 122 & 117 \\
-		$>180$   & 767   & 0,722 & 0,065 & 24  & 26 \\
-		\bottomrule
-	\end{tabular}
-\end{table}
-
-Tabel~\ref{tab:error-lead} menunjukkan bahwa tingkat kesalahan tertinggi
-(21,1\%) terjadi pada \textit{lead time} 91-180 hari, yaitu rentang dengan rasio
-pembatalan paling dekat dengan 50\%. Pada \textit{lead time} sangat pendek
-($\le 7$ hari) dan sangat panjang ($>180$ hari), sebagian besar pemesanan berada
-di satu kelas sehingga tingkat kesalahannya di bawah 8\%. Sebanyak 246 baris
-dengan \textit{lead time} kosong pada data mentah tidak masuk ke tabel ini.
-
-Tingkat kesalahan juga berbeda antarkanal pemesanan. Tingkat kesalahan pada Online
-Travel Agent adalah 17,9\% (3.519 baris), sedangkan pada Offline Agent 6,9\%
-(1.573 baris) dan pada Corporate 8,1\% (309 baris). Rasio pembatalan Online Travel
-Agent (36,2\%) dan Offline Agent (30,8\%) tidak jauh berbeda, tetapi pembatalan
-pada Online Travel Agent lebih sulit dipisahkan oleh fitur yang tersedia. Fitur
-tambahan yang membedakan pemesanan pada kanal ini dapat menjadi arah perbaikan.
-
-\subsection{Decision Tree Learning}
-
-DTL hasil \textit{tuning} ($\texttt{ccp\_alpha}=3\times10^{-4}$) dilatih pada
-\texttt{X\_train} dengan varian \textit{preprocessing} \texttt{tree}, lalu diuji
-pada \texttt{X\_val}. \texttt{DTL} \textit{from scratch} dan
-\texttt{DecisionTreeClassifier} menghasilkan prediksi yang identik, sehingga
-\textit{confusion matrix} keduanya sama (Gambar~\ref{fig:cm-dtl}). Model salah
-memprediksi 813 dari 5.475 baris (14,8\%), terdiri atas 481 \textit{false
-negative} dan 332 \textit{false positive}. Model memprediksi 30,0\% baris sebagai
-batal, sedikit di bawah proporsi pembatalan sebenarnya (32,8\%).
+Matriks berikut berasal dari output \textit{Error Analysis} di notebook.
+Matriks menampilkan tiga model dengan rata-rata \textit{macro F1} 5-\textit{fold}
+tertinggi dari evaluasi utama.
 
 \begin{figure}[H]
 	\centering
-	\includegraphics[width=0.85\textwidth]{confusion_dtl}
-	\caption[\textit{Confusion matrix} DTL pada \texttt{X\_val}]{\textit{Confusion matrix} DTL \textit{from scratch} (kiri) dan \texttt{DecisionTreeClassifier} (kanan) pada \texttt{X\_val} ($\texttt{ccp\_alpha}=3\times10^{-4}$)}
-	\label{fig:cm-dtl}
+	\includegraphics[width=\textwidth]{confusion_tuned}
+	\caption{Matriks kebingungan SVM, KNN, dan DTL hasil \textit{tuning} pada \texttt{X\_val}}
+	\label{fig:cm-tuned}
 \end{figure}
+
+\subsection{Support Vector Machine}
+
+SVM hasil \textit{tuning} salah memprediksi 627 dari 5.475 baris
+\texttt{X\_val} (11,5\%), terdiri atas 387 \textit{false negative} dan
+240 \textit{false positive}. Model memprediksi 1.647 pemesanan (30,1\%)
+sebagai batal, sedangkan 1.794 pemesanan (32,8\%) sebenarnya batal.
+\textit{Recall} kelas batal adalah 0,7843 dan \textit{precision}-nya
+0,8543 (Tabel~\ref{tab:report-svm}).
+
+\subsection{Decision Tree Learning}
+
+DTL hasil \textit{tuning} ($\texttt{ccp\_alpha}=3\times10^{-4}$) salah
+memprediksi 813 dari 5.475 baris (14,8\%). Dari jumlah itu, 481 adalah
+\textit{false negative} dan 332 adalah \textit{false positive}. Model
+memprediksi 1.645 pemesanan (30,0\%) sebagai batal.
 
 \begin{table}[H]
 	\centering
-	\caption{\textit{Classification report} DTL pada \texttt{X\_val} (sama untuk \textit{from scratch} dan scikit-learn)}
+	\caption{\textit{Classification report} DTL \textit{from scratch} pada \texttt{X\_val}}
 	\label{tab:report-dtl}
 	\begin{tabular}{l c c c r}
 		\toprule
@@ -779,52 +668,11 @@ batal, sedikit di bawah proporsi pembatalan sebenarnya (32,8\%).
 		0 (tidak batal) & 0,8744 & 0,9098 & 0,8918 & 3.681 \\
 		1 (batal)       & 0,7982 & 0,7319 & 0,7636 & 1.794 \\
 		\midrule
-		\textit{Accuracy}     & \multicolumn{3}{c}{0,8515} & 5.475 \\
-		\textit{Macro avg}    & 0,8363 & 0,8208 & 0,8277 & 5.475 \\
+		\textit{Accuracy}  & \multicolumn{3}{c}{0,8515} & 5.475 \\
+		\textit{Macro avg} & 0,8363 & 0,8208 & 0,8277 & 5.475 \\
 		\bottomrule
 	\end{tabular}
 \end{table}
-
-Seperti pada SVM, kesalahan DTL berada di antara kedua kelas. Median
-\textit{lead time} kelompok TP adalah 164 hari dan TN 34 hari, sedangkan FN 62 hari
-dan FP 74 hari. Proporsi pemesanan tanpa permintaan khusus adalah 69,9\% pada TP
-dan 34,6\% pada TN, sedangkan pada FP 69,9\% dan pada FN 41,4\%. Pemesanan yang
-salah diprediksi batal memiliki ciri yang sama dengan pembatalan, dan pembatalan
-yang terlewat memiliki ciri yang mirip dengan pemesanan yang tidak batal.
-
-\begin{table}[H]
-	\centering
-	\caption{Tingkat kesalahan DTL pada \texttt{X\_val} berdasarkan \textit{lead time}}
-	\label{tab:error-lead-dtl}
-	\begin{tabular}{l r c c r r}
-		\toprule
-		\textbf{\textit{Lead time} (hari)} & \textbf{Baris} & \textbf{Rasio batal} & \textbf{Tingkat kesalahan} & \textbf{FN} & \textbf{FP} \\
-		\midrule
-		0-7     & 836   & 0,091 & 0,073 & 57  & 4 \\
-		8-30    & 1.005 & 0,193 & 0,152 & 100 & 53 \\
-		31-90   & 1.511 & 0,251 & 0,169 & 138 & 117 \\
-		91-180  & 1.129 & 0,447 & 0,202 & 129 & 99 \\
-		$>180$  & 769   & 0,740 & 0,074 & 19  & 38 \\
-		\bottomrule
-	\end{tabular}
-\end{table}
-
-Tabel~\ref{tab:error-lead-dtl} dihitung dari \textit{lead time} mentah. Sebanyak
-225 baris dengan \textit{lead time} kosong tidak masuk ke tabel ini. Tingkat
-kesalahan tertinggi (20,2\%) terjadi pada \textit{lead time} 91-180 hari, rentang
-dengan rasio pembatalan paling dekat dengan 50\%. Arah kesalahan mengikuti kelas
-mayoritas setiap rentang. Pada \textit{lead time} 0-7 hari, model hampir tidak
-pernah memprediksi batal (4 FP) dan melewatkan 57 pembatalan. Pada \textit{lead
-time} lebih dari 180 hari, FP (38) justru lebih banyak daripada FN (19). Hal ini
-sesuai dengan cara daun DTL memprediksi: setiap daun memilih kelas mayoritas
-sampel latih di dalamnya. Pada segmen yang hampir seluruhnya satu kelas,
-pemesanan dari kelas minoritas ikut diprediksi sebagai kelas mayoritas.
-
-Tingkat kesalahan per kanal pemesanan juga berpola sama dengan SVM. Tingkat
-kesalahan pada Online Travel Agent adalah 17,8\% (3.509 baris, rasio batal
-36,8\%), sedangkan pada Offline Agent 10,1\% (1.580 baris, rasio batal 29,8\%)
-dan pada Corporate 9,3\% (300 baris). Seluruh 76 pemesanan Complimentary
-diprediksi benar karena tidak ada satu pun yang batal.
 
 \subsection{Logistic Regression}
 
@@ -852,11 +700,13 @@ tidak batal. \textit{Recall} kelas batal adalah 0,630 dan \textit{precision}-nya
 pembatalan daripada memberi peringatan palsu; hasil tersebut konsisten dengan
 \textit{macro F1} \textit{hold-out} sebesar 0,7567.
 
+\subsection{K-Nearest Neighbors}
+
 Untuk KNN hasil \textit{tuning} ($k=71$, ambang 0,46), matriks kebingungan
 pada 5.475 baris \texttt{X\_val} ditunjukkan pada
 Tabel~\ref{tab:cm-knn}. Model melewatkan 432 pembatalan dan memberi 323
-peringatan batal yang keliru. Matriks ini menghasilkan \textit{macro F1}
-0,8410 pada \textit{hold-out}.
+peringatan batal yang keliru. \textit{Recall} kelas batal adalah 0,7592,
+\textit{precision} 0,8083, dan \textit{macro F1} 0,8410 pada \textit{hold-out}.
 
 \begin{table}[H]
 	\centering
@@ -875,33 +725,43 @@ peringatan batal yang keliru. Matriks ini menghasilkan \textit{macro F1}
 \section{Prediksi Data Uji}
 \label{sec:prediksi-uji}
 
-Pada eksperimen SVM terdahulu, model RBF dengan $C=3$ dan $\gamma=0{,}1$ dilatih ulang dengan
-gabungan \texttt{X\_train} dan \texttt{X\_val} (27.332 baris). Pelatihan ini
-konvergen setelah 37.842 iterasi SMO dengan 10.927 \textit{support vector}.
-Prediksi untuk 6.844 baris \texttt{X\_test} disimpan di
-\texttt{output/svm\_20261121-120000.csv}, dan modelnya disimpan di berkas
-\texttt{.pkl} dengan nama yang sama. Model memprediksi 29,8\% baris data uji
-sebagai batal, mendekati proporsi prediksi batal pada \texttt{X\_val} (30,4\%).
+Bagian \textit{Kaggle Submission} pada notebook melatih ulang model dan
+\textit{preprocessor} pada seluruh 27.373 baris \texttt{train.csv}.
+Setiap berkas prediksi berisi 6.844 baris dari \texttt{test.csv} dengan
+kolom \texttt{id} dan \texttt{is\_canceled}.
 
-Prediksi pada berkas ini identik dengan prediksi pada submisi Kaggle sebelumnya
-(\texttt{svm\_20261120-214807.csv}) untuk seluruh 6.844 baris. Submisi tersebut
-memperoleh skor 0,84979 pada Kaggle. Skor tersebut lebih
-tinggi daripada \textit{macro F1} \textit{hold-out} (0,8384) dan rata-rata
-5-\textit{fold} (0,8328). Salah satu kemungkinan penyebabnya adalah jumlah data
-latih model akhir yang 25\% lebih banyak, tetapi selisih ini juga dapat berasal
-dari perbedaan sampel data uji.
+\begin{table}[H]
+	\centering
+	\caption{Berkas prediksi tiga model teratas}
+	\label{tab:prediksi-uji}
+	\small
+	\begin{tabular}{l l r}
+		\toprule
+		\textbf{Berkas di \texttt{output/}} & \textbf{Model} & \textbf{Prediksi batal} \\
+		\midrule
+		\texttt{best1\_svm.csv} & SVM RBF dengan \textit{price target encoding} & 2.067 \\
+		\texttt{best2\_knn.csv} & KNN dengan \textit{robust scaling} & 2.120 \\
+		\texttt{best3\_dtl.csv} & CART dengan \textit{pruning} & 2.051 \\
+		\bottomrule
+	\end{tabular}
+\end{table}
 
-Eksperimen Logistic Regression c010 juga menghasilkan berkas prediksi untuk
-6.844 baris data uji. Berkas
-\url{output/lr_calendar_density_c010_lbfgs_scratch.csv} dibuat dengan
-melatih ulang solver L-BFGS pada seluruh data latih setelah perbandingan
-validasi. Dua berkas solver lain dan tabel perbandingannya juga dihasilkan oleh
-sel notebook yang sama; berkas ini merupakan kandidat submisi Logistic
-Regression, terpisah dari submisi SVM yang dilaporkan di atas.
+Untuk submisi SVM, notebook menggunakan $C=2$ dan $\gamma=0{,}025$ dengan
+\textit{preprocessing} versi eksperimen \texttt{svm\_price\_te}. Ambangnya
+sekitar $-0{,}123260605053$, dipilih dari prediksi \textit{out-of-fold}
+pada data latih dengan \textit{preprocessor} yang dilatih ulang di setiap
+lipatan. \texttt{best1\_svm.csv} cocok pada semua ID dan label dengan
+\texttt{svm\_price\_te\_20261123-103056.csv}.
 
-Sel submisi pada notebook terbaru menggunakan KNN \textit{from scratch}
-dengan $k=91$ dan ambang 0,45, yakni konfigurasi dasar yang memperoleh
-\textit{macro F1} 0,8423 pada \textit{hold-out}. Kode sel tersebut melatih
-ulang \textit{preprocessor} dan model pada seluruh \texttt{train.csv} sebelum
-menyimpan prediksi data uji. Skor Kaggle KNN tidak dapat diturunkan dari skor
-validasi lokal dan hanya boleh dilaporkan setelah submisi dilakukan.
+KNN menggunakan konfigurasi dasar $k=91$ dan ambang 0,45,
+yang mencapai \textit{macro F1} 0,8423 pada \textit{hold-out}.
+\texttt{best2\_knn.csv} cocok dengan hasil yang tersimpan untuk sel submisi
+KNN. Prediksi CART diekspor terpisah dengan varian \texttt{tree} dan
+\texttt{ccp\_alpha} $=3\times10^{-4}$.
+
+Eksperimen Logistic Regression c010 juga menghasilkan tiga berkas
+prediksi pada seluruh data uji, termasuk
+\url{output/lr_calendar_density_c010_lbfgs_scratch.csv}
+dari \textit{solver} L-BFGS. Skor Kaggle 0,84979 yang sudah tercatat pada
+eksperimen sebelumnya merujuk pada SVM lama dengan $C=3$ dan
+$\gamma=0{,}1$, pada berkas \texttt{svm\_20261121-120000.csv}.

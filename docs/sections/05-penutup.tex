@@ -3,13 +3,16 @@
 \begin{enumerate}
 	\item SVM \textit{soft margin} telah diimplementasikan \textit{from scratch}
 	dengan SMO dan \textit{second-order working set selection}. Implementasi ini
-	mendukung kernel linear, polinomial, RBF/Gaussian, dan sigmoid. Dengan
-	\textit{hyperparameter} yang sama, \textit{macro F1}-nya identik dengan
-	\texttt{sklearn.svm.SVC}, yaitu 0,8384 pada \textit{hold-out} dan 0,8328 pada
-	5-\textit{fold cross validation}.
-	\item Semua tahap \textit{preprocessing} di-\textit{fit} hanya pada data latih.
-	\textit{Target encoding} tanggal kedatangan dihitung secara
-	\textit{out-of-fold} agar label setiap baris tidak bocor ke fiturnya sendiri.
+	mendukung kernel linear, polinomial, RBF/Gaussian, dan sigmoid. Pada
+	konfigurasi dasar ($C=2$, $\gamma=0{,}025$), SVM \textit{from scratch} dan
+	\texttt{SVC} memperoleh \textit{macro F1} yang sama hingga empat desimal,
+	yaitu 0,8688 pada \textit{hold-out} dan 0,8645 pada 5-\textit{fold}.
+	\item Pada \textit{hold-out}, \textit{preprocessor} di-\textit{fit} pada
+	\texttt{X\_train} dan diterapkan ke \texttt{X\_val}. Statistik kelompok
+	untuk \textit{target encoding} dihitung secara \textit{out-of-fold}.
+	Grid 5-\textit{fold} memakai matriks yang sudah disiapkan pada
+	\texttt{X\_train}, sehingga skor \textit{hold-out} menjadi acuan utama
+	untuk generalisasi.
 \item Bayesian network diimplementasikan \textit{from scratch} dengan
 diskretisasi \textit{equal-frequency}, CPT ber-\textit{Laplace smoothing}, dan
 inferensi di ruang log. Optimasi struktur TAN menaikkan \textit{macro F1}
@@ -25,13 +28,14 @@ KDB, tetapi \textit{macro F1} TAN turun dari 0,7645 menjadi 0,7592.
 	dalam pohon, sehingga dapat dilatih langsung pada data mentah. \textit{Minimal
 	cost-complexity pruning} ($\texttt{ccp\_alpha}=3\times10^{-4}$) menaikkan
 	\textit{macro F1} 5-\textit{fold} dari 0,7982 (pohon penuh) menjadi 0,8223 dan
-	memperkecil pohon dari 2.526 menjadi 122 daun. Skor dan prediksinya identik
-	dengan \texttt{DecisionTreeClassifier} scikit-learn dengan parameter yang sama.
+	memperkecil pohon dari 2.526 menjadi 122 daun. Pada \textit{hold-out},
+	DTL mencapai 0,8277 dan \texttt{DecisionTreeClassifier} mencapai 0,8273
+	dengan parameter yang sama.
 	\item Logistic Regression diimplementasikan \textit{from scratch} dengan
 	\textit{stochastic gradient ascent} dan regularisasi L1, L2, serta Elastic Net.
 	Pada konfigurasi dasar, \textit{grid search} memilih laju belajar 0,1 dan 1.000
 	pembaruan dengan rata-rata \textit{macro F1} 5-\textit{fold} 0,7274. Pada
-	eksperimen c010, L-BFGS memperoleh \textit{macro F1} validasi 0,8499, lebih
+	eksperimen c010, L-BFGS memperoleh \textit{macro F1} validasi 0,8498, lebih
 	tinggi daripada \textit{mini-batch} SGD (0,8424) dan \textit{batch gradient
 	descent} (0,8420) pada fitur yang sama.
 	\item KNN \textit{from scratch} dengan jarak Manhattan, bobot fitur, dan
@@ -43,17 +47,17 @@ KDB, tetapi \textit{macro F1} TAN turun dari 0,7645 menjadi 0,7592.
 Di antara konfigurasi yang dibandingkan dengan protokol validasi utama dalam
 laporan ini, SVM RBF terbaru ($C=2$, $\gamma=0{,}035$) memperoleh rata-rata
 \textit{macro F1} 5-\textit{fold} tertinggi, yaitu 0,8646. KNN berada
-di urutan kedua dengan 0,8388. Eksperimen Logistic Regression c010 memakai himpunan fitur dan
-pembagian data tersendiri, sehingga angka 0,8499 tidak dibandingkan langsung
-sebagai peringkat model dasar.
+di urutan kedua dengan 0,8388. Pada \textit{hold-out}, kedua model mencapai
+0,8671 dan 0,8410. Skor 0,8498 dari eksperimen Logistic Regression c010
+berasal dari himpunan fitur dan pembagian data tersendiri.
 
 \section{Saran}
 
 \begin{enumerate}
-	\item \textit{Recall} kelas batal (75\%) lebih rendah daripada
-	\textit{precision}-nya (81\%). Ambang \texttt{decision\_function} dapat digeser
-	dari 0, atau nilai $C$ dapat dibedakan per kelas. Kedua cara ini perlu diuji
-	untuk melihat apakah \textit{macro F1} naik.
+	\item Pada SVM hasil \textit{tuning}, \textit{recall} kelas batal 78,4\%
+	dan \textit{precision} 85,4\%. Pengaruh perubahan ambang atau penalti
+	per kelas dapat diuji pada data validasi yang tidak dipakai untuk
+	memilih parameter.
 \end{enumerate}
 
 Pada Bayesian network, skor KDB turun setelah $k=10$, kemungkinan karena data per
@@ -65,10 +69,10 @@ Fitur yang diturunkan dari fitur yang sama (misalnya \texttt{month\_sin},
 \texttt{month\_cos}, dan \texttt{arrival\_month}) juga dapat dikurangi untuk
 melihat apakah selisih \textit{Naive Bayes} dan TAN mengecil.
 
-Pada DTL, imputasi median kelompok masih lebih baik daripada penanganan nilai
-kosong di dalam pohon. \textit{Surrogate split} dari CART asli, yaitu memakai
-fitur lain yang pemisahannya paling mirip untuk baris yang kosong, dapat diuji
-untuk melihat apakah selisih tersebut hilang.
+Pada DTL, varian \texttt{tree} memperoleh skor lebih tinggi daripada
+data mentah. Eksperimen lanjutan dapat menguji kontribusi imputasi secara
+terpisah atau memakai \textit{surrogate split}, yaitu fitur pengganti
+untuk menentukan cabang ketika nilai fitur utama kosong.
 
 Pada KNN, pemilihan $k$ dan ambang menghasilkan selisih skor yang kecil
 dibandingkan simpangan baku antarlipatan. Penelitian lanjut dapat menilai

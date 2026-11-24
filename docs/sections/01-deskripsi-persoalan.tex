@@ -98,9 +98,9 @@ F1-score} adalah rata-rata F1 kedua kelas.
 
 Delapan atribut memiliki nilai hilang dengan proporsi yang hampir sama pada data
 latih dan data uji (Tabel~\ref{tab:missing}). Imputasi yang di-\textit{fit} pada
-data latih pun dapat diterapkan langsung ke data uji. Data latih memuat 66 baris
-duplikat (seluruh fitur identik), data uji memuat 3 baris, dan gabungan keduanya
-memuat 109 baris.
+data latih pun dapat diterapkan langsung ke data uji. Output notebook
+mencatat 66 duplikat berdasarkan seluruh fitur di \texttt{train.csv}
+dan tidak ada ID latih yang duplikat.
 
 \begin{table}[H]
 	\centering
@@ -129,15 +129,15 @@ Sebagian besar fitur numerik menceng ke kanan. Median
 \texttt{nightly\_rate\_idr} adalah Rp1.644.000 dengan maksimum Rp9.165.000, dan
 beberapa baris memiliki harga Rp0. Hampir semua nilai
 \texttt{prior\_cancellations} dan \texttt{prior\_completed\_bookings} adalah 0.
-Distribusi kategori juga timpang: Type B mencakup 75\% nilai
-\texttt{room\_category}, Full Board hanya muncul empat kali pada
+Distribusi kategori juga timpang: Type B mencakup 74,7\% baris
+\texttt{train.csv}, Full Board hanya muncul empat kali pada
 \texttt{meal\_package}, dan Airline hanya muncul 88 kali pada
 \texttt{booking\_channel}.
 
 \subsection{Korelasi dengan Target}
 
-Gambar~\ref{fig:korelasi} menunjukkan korelasi Pearson antara setiap fitur numerik
-dan target. Korelasi positif terbesar dimiliki \texttt{days\_before\_arrival}
+Gambar~\ref{fig:korelasi} menampilkan matriks korelasi Pearson untuk delapan
+fitur numerik yang paling berkorelasi dengan target dan kolom target. Korelasi positif terbesar dimiliki \texttt{days\_before\_arrival}
 (0,44): pemesanan yang dibuat jauh hari lebih sering dibatalkan. Korelasi negatif
 terbesar dimiliki \texttt{special\_requests} ($-0{,}26$): tamu yang mengajukan
 permintaan khusus lebih jarang membatalkan pemesanan. \texttt{arrival\_year} (0,18)
@@ -146,21 +146,21 @@ dan \texttt{nightly\_rate\_idr} (0,13) juga berkorelasi positif dengan pembatala
 \begin{figure}[H]
 	\centering
 	\includegraphics[width=0.75\textwidth]{correlation}
-	\caption{Korelasi fitur numerik dengan \texttt{is\_canceled}}
+	\caption{Matriks korelasi fitur numerik terpilih dan \texttt{is\_canceled}}
 	\label{fig:korelasi}
 \end{figure}
 
 \subsection{Rasio Pembatalan per Kategori}
 
 Gambar~\ref{fig:target-rate} menunjukkan rasio pembatalan untuk setiap nilai
-\texttt{booking\_channel}, \texttt{meal\_package}, \texttt{room\_category}, dan
-\texttt{arrival\_month}. Gambar ini dibuat dengan fungsi \texttt{target\_rate} di
-\texttt{src/eda.py}. Garis putus-putus menandai rasio pembatalan seluruh data
-latih (32,8\%).
+\texttt{booking\_channel}, \texttt{meal\_package}, \texttt{room\_category},
+\texttt{special\_requests}, \texttt{arrival\_month}, dan
+\texttt{is\_returning\_guest}. Gambar berasal dari output fungsi
+\texttt{target\_rate} di notebook. Rasio pada seluruh data latih adalah 32,8\%.
 
 \begin{figure}[H]
 	\centering
-	\includegraphics[width=0.95\textwidth]{target_rate}
+	\includegraphics[width=0.82\textwidth]{target_rate}
 	\caption{Rasio pembatalan per kategori pada data latih}
 	\label{fig:target-rate}
 \end{figure}
@@ -178,7 +178,7 @@ hanya berasal dari empat pemesanan.
 
 Pada \texttt{room\_category}, Type A memiliki rasio tertinggi (42,6\% dari 699
 pemesanan), sedangkan Type C (24,9\%) dan Type F (24,4\%) memiliki rasio
-terendah. Type B dan Type G, yang bersama-sama mencakup 91\% data, memiliki rasio
+terendah. Type B dan Type G, yang bersama-sama mencakup 90,8\% baris latih, memiliki rasio
 32,1\% dan 34,2\%. Selisih antartipe kamar lebih kecil daripada selisih antarkanal
 pemesanan.
 
