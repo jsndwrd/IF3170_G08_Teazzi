@@ -285,7 +285,10 @@ ini juga menambahkan dua kelompok fitur berbasis label, yaitu \texttt{near\_*} d
 \texttt{te\_*} (Subbab~\ref{sec:label}). Kernel RBF sulit mempelajari interaksi
 yang melibatkan kategori nominal atau pola per tanggal hanya dari jarak.
 \textit{Target encoding} meringkas interaksi tersebut menjadi satu angka per baris.
-Model terbaik memakai SVM RBF dengan $C=2$ dan $\gamma=0{,}035$ pada 61 kolom.
+Model SVM teratas pada evaluasi notebook memakai RBF dengan $C=2$ dan
+$\gamma=0{,}035$ pada 61 kolom. Sel submisi memakai $\gamma=0{,}025$
+dan varian \textit{preprocessing} dari eksperimen \texttt{svm\_price\_te}
+(Subbab~\ref{sec:prediksi-uji}).
 
 \section{Pembagian Data}
 
@@ -396,10 +399,10 @@ tidak diketahui karena logaritmanya tidak terdefinisi.
 Nilai \texttt{days\_before\_arrival} dan \texttt{nightly\_rate\_idr} dibatasi
 (\textit{capping}) ke rentang IQR
 $[Q_1-1{,}5\,\text{IQR},\ Q_3+1{,}5\,\text{IQR}]$ yang dihitung dari
-\texttt{X\_train}. Pada \texttt{X\_train}, batas atasnya adalah 278 hari dan
-Rp2.959.000. Batas bawah \textit{lead time} bernilai negatif sehingga tidak
-pernah tercapai. Baris dengan nilai ekstrem tidak dibuang karena baris tersebut
-tetap valid dan harus diprediksi.
+\texttt{X\_train}. Output pemeriksaan pencilan sebelum imputasi pada \texttt{X\_train}
+mencatat 726 nilai pada \texttt{days\_before\_arrival} dan 904 pada
+\texttt{nightly\_rate\_idr}. Saat \textit{preprocessing}, batas dihitung
+setelah imputasi. Baris dengan nilai ekstrem tetap dipakai.
 
 \textit{Capping} dipakai oleh semua varian kecuali \texttt{tree}. Pengaruhnya
 berbeda untuk setiap model.
@@ -488,10 +491,11 @@ dihitung secara \textit{out-of-fold}. \texttt{X\_train} dibagi menjadi lima
 \textit{fold} dengan \texttt{stratified\_folds}, dan setiap baris mendapat nilai
 dari statistik yang dihitung tanpa \textit{fold}-nya sendiri. \texttt{X\_val} dan
 \texttt{X\_test} memakai statistik dari seluruh \texttt{X\_train}. Tanpa langkah
-ini, label setiap baris ikut masuk ke fiturnya sendiri. Model akan belajar
-menyalin fitur tersebut, dan skor validasi menjadi bias. Risiko ini berlaku untuk
-semua model, tetapi paling besar pada model yang mudah \textit{overfit}, seperti
-pohon keputusan yang dalam dan KNN dengan $k$ kecil.
+ini, label setiap baris dapat ikut membentuk statistik kelompoknya.
+Jalur submisi SVM mempertahankan konfigurasi \textit{smoothing} historis
+yang memakai proporsi pembatalan pada data yang dipakai untuk \textit{fit}.
+Saat ambang submisi dipilih, \textit{preprocessor} tetap dilatih ulang pada
+bagian latih setiap \textit{fold} evaluasi.
 
 \subsection{Rasio Pembatalan per Tanggal Kedatangan}
 
@@ -692,9 +696,9 @@ yang tetap. Skor dihitung dengan dua cara.
 	di-\textit{fit} ulang hanya pada empat \textit{fold} latih. Dengan cara ini,
 	fitur berbasis label tidak pernah melihat label \textit{fold} uji.
 \end{enumerate}
-Skor dihitung dengan \texttt{SVC} scikit-learn karena lebih cepat dan
-menghasilkan skor yang identik dengan SVM \textit{from scratch}
-(Tabel~\ref{tab:perbandingan}). Bagian atas Tabel~\ref{tab:ablasi} menambahkan
+Ablasi ini memakai \texttt{SVC} scikit-learn dan protokol evaluasi
+tersendiri. Angkanya disajikan terpisah dari perbandingan utama di
+Tabel~\ref{tab:perbandingan}. Bagian atas Tabel~\ref{tab:ablasi} menambahkan
 langkah secara bertahap, sedangkan bagian bawah mengubah satu pilihan pada
 konfigurasi akhir.
 
