@@ -167,7 +167,7 @@ class BayesNetwork(BaseModel):
                 self.log_cpt.append(SparseCPT([y_idx, *parent_bins, B[:, j]], sizes, n_values, self.alpha))
                 continue
 
-            counts = np.zeros((len(self.classes), *parent_sizes, n_values)) 
+            counts = np.zeros((len(self.classes), *parent_sizes, n_values))
             np.add.at(counts, (y_idx, *parent_bins, B[:, j]), 1)
 
             smoothed = counts + self.alpha

@@ -425,7 +425,7 @@ def _strong_wolfe_line_search(objective, parameters, loss, gradient, direction):
 
     # Reference: Wolfram Language Documentation, Unconstrained Optimization: Step Control
     # URL: https://reference.wolframcloud.com/language/tutorial/UnconstrainedOptimizationStepControl.html
-    
+
     c1, c2 = 1e-4, 0.9
     initial_slope = np.dot(gradient, direction)
     if initial_slope >= 0:
@@ -490,7 +490,7 @@ def lbfgs_minimize(
     # HTML: https://arxiv.org/html/2305.08552
     # Armijo and strong-Wolfe conditions: Wolfram Language Documentation, Step Control
     # URL: https://reference.wolframcloud.com/language/tutorial/UnconstrainedOptimizationStepControl.html
-    
+
     parameters = np.asarray(initial, dtype=float).copy()
     loss, gradient = objective(parameters)
     s_history, y_history, rho_history = [], [], []
@@ -634,7 +634,7 @@ def gradient_descent_minimize(
     # URL: https://www.ibm.com/think/topics/gradient-descent
     # Armijo backtracking reference: Armijo (1966), Pacific Journal of Mathematics 16(1), 1-3
     # Direct PDF: https://msp.org/pjm/1966/16-1/pjm-v16-n1-p01-p.pdf
-    
+
     parameters = np.asarray(initial, dtype=float).copy()
     loss, gradient = objective(parameters)
     step_size = initial_step
@@ -702,7 +702,7 @@ def minibatch_sgd_minimize(
     # URL: https://www.geeksforgeeks.org/machine-learning/gradient-descent-algorithm-and-its-variants/
     # Gradient descent overview: IBM Think
     # URL: https://www.ibm.com/think/topics/gradient-descent
-    
+
     x = np.asarray(x, dtype=float)
     labels = np.asarray(labels, dtype=float).reshape(-1)
     parameters = np.asarray(initial, dtype=float).copy()
