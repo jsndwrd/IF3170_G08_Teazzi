@@ -27,10 +27,25 @@ KDB, tetapi \textit{macro F1} TAN turun dari 0,7645 menjadi 0,7592.
 	\textit{macro F1} 5-\textit{fold} dari 0,7982 (pohon penuh) menjadi 0,8223 dan
 	memperkecil pohon dari 2.526 menjadi 122 daun. Skor dan prediksinya identik
 	dengan \texttt{DecisionTreeClassifier} scikit-learn dengan parameter yang sama.
+	\item Logistic Regression diimplementasikan \textit{from scratch} dengan
+	\textit{stochastic gradient ascent} dan regularisasi L1, L2, serta Elastic Net.
+	Pada konfigurasi dasar, \textit{grid search} memilih laju belajar 0,1 dan 1.000
+	pembaruan dengan rata-rata \textit{macro F1} 5-\textit{fold} 0,7274. Pada
+	eksperimen c010, L-BFGS memperoleh \textit{macro F1} validasi 0,8499, lebih
+	tinggi daripada \textit{mini-batch} SGD (0,8424) dan \textit{batch gradient
+	descent} (0,8420) pada fitur yang sama.
+	\item KNN \textit{from scratch} dengan jarak Manhattan, bobot fitur, dan
+	suara kuadrat-terbalik mencapai rata-rata \textit{macro F1} 5-\textit{fold}
+	0,8388 pada $k=71$ dan ambang 0,46. Pada \textit{hold-out}, nilainya 0,8410;
+	432 pembatalan terlewat dan 323 pemesanan aktif salah ditandai batal.
 \end{enumerate}
 
-\todo{Tambahkan kesimpulan untuk KNN dan Logistic Regression, serta model
-terbaik secara keseluruhan setelah \textit{tuning}.}
+Di antara konfigurasi yang dibandingkan dengan protokol validasi utama dalam
+laporan ini, SVM RBF terbaru ($C=2$, $\gamma=0{,}035$) memperoleh rata-rata
+\textit{macro F1} 5-\textit{fold} tertinggi, yaitu 0,8646. KNN berada
+di urutan kedua dengan 0,8388. Eksperimen Logistic Regression c010 memakai himpunan fitur dan
+pembagian data tersendiri, sehingga angka 0,8499 tidak dibandingkan langsung
+sebagai peringkat model dasar.
 
 \section{Saran}
 
@@ -55,4 +70,11 @@ kosong di dalam pohon. \textit{Surrogate split} dari CART asli, yaitu memakai
 fitur lain yang pemisahannya paling mirip untuk baris yang kosong, dapat diuji
 untuk melihat apakah selisih tersebut hilang.
 
-\todo{Tambahkan saran dari hasil algoritma lain.}
+Pada KNN, pemilihan $k$ dan ambang menghasilkan selisih skor yang kecil
+dibandingkan simpangan baku antarlipatan. Penelitian lanjut dapat menilai
+stabilitas bobot fitur, memperluas rentang $k$, dan menguji ambang pada data
+validasi yang terpisah dari data pemilihan parameter. Pada Logistic Regression,
+\textit{batch gradient descent} dan \textit{mini-batch} SGD belum memenuhi
+kriteria konvergensi pada batas iterasi yang digunakan; jadwal laju belajar,
+batas iterasi, dan regularisasi dapat diteliti dengan protokol validasi yang
+sama sebelum membandingkannya kembali dengan L-BFGS.
