@@ -23,14 +23,18 @@ pernyataan pada subbab berikutnya mengikuti format Panduan Penggunaan
 \end{table}
 
 % ---------- Surat pernyataan (format Panduan AI ITB) ----------
-% Tanda tangan: simpan gambar di docs/public/ttd/<NIM>.png (latar transparan atau putih).
+% Tanda tangan: simpan gambar di docs/public/ttd/<NIM>.png atau .jpeg.
 \newcommand{\ttdanggota}[2]{%
 	\begin{minipage}[t]{6.5cm}
 		\centering
 		\IfFileExists{public/ttd/#2.png}{%
 			\includegraphics[height=2cm,width=5.5cm,keepaspectratio]{ttd/#2}%
 		}{%
-			\rule{0pt}{2cm}%
+			\IfFileExists{public/ttd/#2.jpeg}{%
+				\includegraphics[height=2cm,width=5.5cm,keepaspectratio]{ttd/#2.jpeg}%
+			}{%
+				\rule{0pt}{2cm}%
+			}%
 		}\\[2pt]
 		\rule{5.5cm}{0.4pt}\\[2pt]
 		#1\\
@@ -78,7 +82,7 @@ luaran tugas pada mata kuliah yang tertulis di atas.
 	Pembuatan Teks: menggunakan \textit{tools} seperti ChatGPT, Gemini, Paperpal,
 	Copilot, GrammarlyGO, WordAI, WriteSonic, Jasper, Jenni AI, atau sejenisnya.
 	& Ya
-	& Membantu menyusun kerangka laporan. \\
+	& Membantu menyusun kerangka laporan dan menyunting uraian Logistic Regression serta analisis hasil eksperimennya. \\
 	\hline
 	Bantuan Diskusi dalam Penyusunan Konten: menggunakan \textit{tools} seperti
 	ChatGPT, Gemini, Copilot, Perplexity, Jenni AI, Zoom-Companion, atau

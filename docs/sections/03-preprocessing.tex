@@ -1,29 +1,40 @@
 Seluruh tahap \textit{cleaning} dan \textit{preprocessing} berada di
-\texttt{src/preprocessing.py} dan diatur melalui kelas \texttt{Preprocessor} di
-\textit{notebook}. Bab ini menjelaskan konfigurasi \texttt{svm}, yaitu
-\textit{preprocessing} yang dipakai model dengan skor terbaik (SVM RBF, $C=2$,
-$\gamma=0{,}025$). Model lain memakai varian yang lebih sederhana dari kelas yang
-sama (Tabel~\ref{tab:varian-prep}).
+\texttt{src/preprocessing.py} dan dijalankan oleh satu kelas,
+\texttt{Preprocessor}. Kelima model memakai kelas yang sama dengan urutan
+langkah yang sama. Perbedaannya hanya pada langkah yang diaktifkan dan pada
+parameternya. Pengaturan ini menghasilkan lima varian, yaitu \texttt{default},
+\texttt{tree}, \texttt{knn}, \texttt{lr}, dan \texttt{svm}. Setiap varian
+disesuaikan dengan asumsi algoritma yang memakainya (Subbab~\ref{sec:varian}).
+Model scikit-learn pembanding memakai varian yang sama dengan model
+\textit{from scratch} yang setara.
 
 Untuk mencegah \textit{data leakage}, data dibagi terlebih dahulu. Setelah itu,
-setiap statistik (nilai imputasi, batas pencilan, daftar kategori, rata-rata,
-simpangan baku, dan semua statistik yang dihitung dari label) dihitung hanya dari
-data latih, lalu diterapkan apa adanya ke \texttt{X\_val} dan \texttt{X\_test}.
-Urutan langkah di dalam \texttt{Preprocessor} adalah sebagai berikut.
+setiap statistik (nilai imputasi, batas pencilan, daftar kategori, batas
+\textit{bin}, rata-rata, simpangan baku, dan semua statistik yang dihitung dari
+label) dihitung hanya dari data latih. Statistik ini kemudian diterapkan apa
+adanya ke \texttt{X\_val} dan \texttt{X\_test}. Prinsip ini berlaku untuk semua
+varian. Urutan langkah di dalam \texttt{Preprocessor} adalah sebagai berikut.
+Varian yang menjalankan langkah opsional ditulis dalam kurung.
 \begin{enumerate}
-	\item Fitur berbasis label (\texttt{te\_*} dan \texttt{near\_*}) dihitung dari
-	nilai mentah sebelum imputasi.
-	\item Penanda nilai hilang \texttt{special\_requests\_missing} ditambahkan.
+	\item Fitur berbasis label \texttt{te\_*} dan \texttt{near\_*} dihitung dari
+	nilai mentah sebelum imputasi (\texttt{svm}).
+	\item Penanda nilai hilang \texttt{special\_requests\_missing} ditambahkan
+	(\texttt{lr}, \texttt{svm}).
 	\item \texttt{nightly\_rate\_idr} dan \texttt{days\_before\_arrival} diimputasi
 	dengan median kelompok, lalu rasionya terhadap median kelompok dihitung.
 	\item Statistik tanggal kedatangan (\texttt{date\_rate} dan
 	\texttt{date\_count}) ditambahkan.
 	\item Nilai hilang lain diimputasi dengan median atau modus.
-	\item Fitur turunan dibuat oleh fungsi \texttt{engineer}.
-	\item Pencilan dibatasi (\textit{capping}).
-	\item Atribut kategorikal di-\textit{encode}, lalu semua kolom distandardisasi.
+	\item Fitur turunan dibuat oleh fungsi \texttt{engineer}. Varian
+	\texttt{default} dan \texttt{tree} membuang enam fitur turunan baru.
+	\item Pencilan dibatasi (\textit{capping}) (semua varian kecuali \texttt{tree}).
+	\item Fitur numerik tertentu dibagi menjadi \textit{bin} kuantil (\texttt{lr}).
+	Atribut kategorikal di-\textit{encode}, lalu kolom di-\textit{scale} dengan
+	standardisasi, \textit{robust scaling} (\texttt{knn}), atau tanpa
+	\textit{scaling} (\texttt{tree}).
 \end{enumerate}
-Gambar~\ref{fig:alur-prep} menunjukkan alur data dari pembagian hingga model.
+Langkah 3--5 dijalankan pada semua varian. Gambar~\ref{fig:alur-prep}
+menunjukkan alur data dari pembagian hingga model.
 
 \begin{figure}[!t]
 	\centering
@@ -43,19 +54,19 @@ Gambar~\ref{fig:alur-prep} menunjukkan alur data dari pembagian hingga model.
 		\node[data, text width=4.4cm, below=5mm of split] (xtrain) {\texttt{X\_train}: 21.898 baris\\\texttt{drop\_duplicates}: 21.857};
 		\node[data, below=5mm of xval] (xtest) {\texttt{X\_test} (\texttt{test.csv})\\6.844 baris};
 
-		\node[lstep, below=9mm of xtrain] (s1) {\textbf{1.} \textit{Target encoding} \texttt{te\_*} (20 kunci) dan \texttt{near\_*} (dua toleransi) dari nilai mentah};
-		\node[pstep, below=of s1] (s2) {\textbf{2.} Penanda \texttt{special\_requests\_missing}};
+		\node[lstep, below=9mm of xtrain] (s1) {\textbf{1.} \texttt{te\_*} dan \texttt{near\_*} dari nilai mentah [\texttt{svm}]};
+		\node[pstep, below=of s1] (s2) {\textbf{2.} Penanda \texttt{special\_requests\_missing} [\texttt{lr}, \texttt{svm}]};
 		\node[pstep, below=of s2] (s3) {\textbf{3.} Imputasi median kelompok untuk harga dan \textit{lead time}, fitur rasio};
 		\node[lstep, below=of s3] (s4) {\textbf{4.} \texttt{date\_rate} dan \texttt{date\_count}};
 		\node[pstep, below=of s4] (s5) {\textbf{5.} Imputasi median (numerik) dan modus (kategorikal)};
 		\node[pstep, below=of s5] (s6) {\textbf{6.} \texttt{engineer}: fitur turunan dari baris yang sama};
-		\node[pstep, below=of s6] (s7) {\textbf{7.} \textit{Capping} IQR pada \textit{lead time} dan harga};
-		\node[pstep, below=of s7] (s8) {\textbf{8.} \textit{Ordinal} dan \textit{one-hot encoding}, standardisasi $(x-\mu)/\sigma$};
+		\node[pstep, below=of s6] (s7) {\textbf{7.} \textit{Capping} IQR pada \textit{lead time} dan harga [kecuali \texttt{tree}]};
+		\node[pstep, below=of s7] (s8) {\textbf{8.} \textit{Binning} kuantil [\texttt{lr}], \textit{encoding}, \textit{scaling} [kecuali \texttt{tree}]};
 		\node[draw, dashed, rounded corners=3pt, inner sep=2.5mm, fit=(s1)(s8),
-			label={[rotate=90, anchor=south, font=\footnotesize\bfseries]west:\texttt{Preprocessor} (konfigurasi \texttt{svm})}] (prep) {};
+			label={[rotate=90, anchor=south, font=\footnotesize\bfseries]west:\texttt{Preprocessor} (lima varian)}] (prep) {};
 
-		\node[data, below=6mm of prep] (out) {Matriks 61 kolom};
-		\node[proc, right=8mm of out] (svm) {SVM RBF\\($C=2$, $\gamma=0{,}025$)};
+		\node[data, text width=4.4cm, below=6mm of prep] (out) {Matriks fitur per varian\\(30--171 kolom, Tabel~\ref{tab:varian-prep})};
+		\node[proc, right=8mm of out] (model) {BN, DTL, KNN,\\LR, SVM};
 
 		\draw[arr] (train) -- (split);
 		\draw[arr] (split) -- (xval);
@@ -66,47 +77,215 @@ Gambar~\ref{fig:alur-prep} menunjukkan alur data dari pembagian hingga model.
 			node[pos=0.3, right, align=left, font=\scriptsize] {\texttt{transform}\\(statistik\\\texttt{X\_train})};
 		\draw[semithick, dashed] (xtest.east) -- (xtest.east -| bus);
 		\draw[arr] (prep) -- (out);
-		\draw[arr] (out) -- (svm);
+		\draw[arr] (out) -- (model);
 	\end{tikzpicture}
-	\caption{Alur \textit{preprocessing} model terbaik. Kotak oranye memakai label
-	dan dihitung secara \textit{out-of-fold} pada \texttt{X\_train}; kotak biru tidak
-	memakai label. Semua statistik dipelajari dari \texttt{X\_train}, lalu diterapkan
-	ke \texttt{X\_val} dan \texttt{X\_test}.}
+	\caption{Alur \textit{preprocessing} untuk semua model. Tanda dalam kurung siku
+	menunjukkan varian yang menjalankan langkah tersebut; langkah tanpa tanda
+	dijalankan semua varian. Kotak oranye memakai label dan dihitung secara
+	\textit{out-of-fold} pada \texttt{X\_train}; kotak biru tidak memakai label.
+	Semua statistik dipelajari dari \texttt{X\_train}, lalu diterapkan ke
+	\texttt{X\_val} dan \texttt{X\_test}.}
 	\label{fig:alur-prep}
 \end{figure}
 
-\paragraph{Prosedur evaluasi.} Pengaruh setiap langkah diukur dengan SVM RBF
-yang sama ($C=2$, $\gamma=0{,}025$) memakai dua skor \textit{macro F1}.
-\begin{enumerate}
-	\item \textit{Hold-out}: \texttt{Preprocessor} di-\textit{fit} pada
-	\texttt{X\_train}, lalu model diuji pada \texttt{X\_val}.
-	\item 5-\textit{fold}: \texttt{train.csv} dibagi menjadi lima \textit{fold}.
-	Pada setiap \textit{fold}, duplikat dihapus dan \texttt{Preprocessor}
-	di-\textit{fit} ulang hanya pada empat \textit{fold} latih. Dengan cara ini,
-	fitur berbasis label tidak pernah melihat label \textit{fold} uji.
-\end{enumerate}
-Skor dihitung dengan \texttt{SVC} scikit-learn karena lebih cepat dan
-menghasilkan skor yang identik dengan SVM \textit{from scratch}
-(Tabel~\ref{tab:perbandingan}). Ringkasan hasilnya terdapat pada
-Tabel~\ref{tab:ablasi}.
+\section{Varian \textit{Preprocessing} per Model}
+\label{sec:varian}
+
+Tabel~\ref{tab:varian-prep} merangkum isi kelima varian. Varian
+\texttt{default} menjadi titik awal. Varian lain menambah atau menghapus langkah
+sesuai kebutuhan algoritma.
 
 \begin{table}[H]
 	\centering
 	\caption{Varian \texttt{Preprocessor} untuk setiap model}
 	\label{tab:varian-prep}
 	\small
-	\begin{tabular}{l l p{8.2cm}}
+	\begin{tabular}{l l r p{7.6cm}}
 		\toprule
-		\textbf{Varian} & \textbf{Model} & \textbf{Isi} \\
+		\textbf{Varian} & \textbf{Model} & \textbf{Kolom} & \textbf{Isi} \\
 		\midrule
-		\texttt{default} & BN & Fitur dasar (tiga puluh kolom), \textit{capping}, \textit{ordinal encoding}, standardisasi \\
-		\texttt{tree} & DTL & Seperti \texttt{default}, tanpa \textit{capping} dan \textit{scaling} karena pemisahan pada pohon tidak bergantung pada skala \\
-		\texttt{knn} & KNN & \texttt{default} ditambah enam fitur turunan baru dan penanda nilai hilang \\
-		\texttt{lr} & LR & \texttt{knn} dengan \textit{one-hot encoding} untuk semua kategori dan dua puluh \textit{bin} kuantil untuk sepuluh fitur numerik agar model linear dapat membentuk hubungan tidak linear \\
-		\texttt{svm} & SVM & \texttt{knn} ditambah fitur \texttt{near\_*} dan dua puluh \textit{target encoding} \texttt{te\_*} (61 kolom) \\
+		\texttt{default} & BN & 30 & Fitur dasar, \textit{capping}, \textit{ordinal encoding} untuk \texttt{meal\_package} dan \texttt{room\_category}, \textit{one-hot encoding} untuk \texttt{booking\_channel}, standardisasi \\
+		\texttt{tree} & DTL & 30 & Kolom yang sama dengan \texttt{default}, tanpa \textit{capping} dan tanpa \textit{scaling} \\
+		\texttt{knn} & KNN & 36 & \texttt{default} ditambah enam fitur turunan baru, \textit{robust scaling}, \textit{smoothing} \texttt{date\_rate} $m=5$ \\
+		\texttt{lr} & LR & 171 & Fitur \texttt{knn} ditambah penanda nilai hilang, \textit{one-hot encoding} untuk ketiga atribut kategorikal, 20 \textit{bin} kuantil untuk sepuluh fitur numerik, standardisasi \\
+		\texttt{svm} & SVM & 61 & Fitur \texttt{knn} ditambah penanda nilai hilang, empat fitur \texttt{near\_*}, dan dua puluh \textit{target encoding} \texttt{te\_*}, standardisasi \\
 		\bottomrule
 	\end{tabular}
 \end{table}
+
+Tabel~\ref{tab:varian-holdout} menguji pilihan varian setiap model. Setiap
+model memakai \textit{hyperparameter} pada \textit{notebook}. Skor
+\textit{hold-out} diperoleh dengan meng-\textit{fit} \texttt{Preprocessor} pada
+\texttt{X\_train}, lalu menguji model pada \texttt{X\_val}. Skor 5-\textit{fold}
+dihitung pada \texttt{X\_train}. Pada setiap \textit{fold}, duplikat dihapus dan
+\texttt{Preprocessor} di-\textit{fit} ulang hanya pada empat \textit{fold} latih.
+Karena prosedurnya berbeda, skor 5-\textit{fold} di sini dapat sedikit berbeda dari
+Bab~4, yang memakai matriks fitur dari \textit{notebook}. Hasil SVM dibahas
+terpisah pada Subbab~\ref{sec:ablasi}. Varian SVM memiliki langkah paling banyak,
+sehingga ablasi per langkah dilakukan pada model tersebut.
+
+\begin{table}[H]
+	\centering
+	\caption{\textit{Macro F1} setiap model pada beberapa varian \textit{preprocessing}}
+	\label{tab:varian-holdout}
+	\small
+	\setlength{\tabcolsep}{4pt}
+	\begin{tabular}{l l r c c c}
+		\toprule
+		\textbf{Model} & \textbf{Varian} & \textbf{Kolom} & \textbf{\textit{Hold-out}} & \textbf{5-\textit{fold} $\mu$} & \textbf{5-\textit{fold} $\sigma$} \\
+		\midrule
+		BN (\textit{Naive Bayes})  & \texttt{default} (dipakai) & 30 & 0,7050 & 0,7119 & 0,0092 \\
+		                           & \texttt{tree}              & 30 & 0,7050 & 0,7119 & 0,0092 \\
+		BN (KDB, $k=10$)           & \texttt{default} (dipakai) & 30 & 0,8112 & 0,8097 & 0,0077 \\
+		                           & \texttt{tree}              & 30 & 0,8112 & 0,8097 & 0,0077 \\
+		\midrule
+		DTL                        & \texttt{tree} (dipakai)    & 30 & 0,8277 & 0,8255 & 0,0067 \\
+		                           & \texttt{default}           & 30 & 0,8286 & 0,8247 & 0,0067 \\
+		\midrule
+		KNN                        & \texttt{knn} (dipakai)     & 36 & 0,8423 & 0,8378 & 0,0056 \\
+		                           & dengan standardisasi       & 36 & 0,8353 & 0,8316 & 0,0053 \\
+		                           & tanpa \textit{capping}     & 36 & 0,8419 & 0,8381 & 0,0053 \\
+		                           & tanpa enam fitur baru      & 30 & \textbf{0,8491} & \textbf{0,8443} & 0,0057 \\
+		\midrule
+		LR (\textit{from scratch}) & \texttt{lr} (dipakai)      & 171 & 0,7597 & \textbf{0,7169} & 0,0177 \\
+		                           & tanpa \textit{binning}     & 46 & 0,7414 & 0,6944 & 0,0259 \\
+		                           & dengan \textit{ordinal encoding} & 162 & 0,7581 & 0,7098 & 0,0192 \\
+		                           & \texttt{default}           & 30 & 0,7629 & 0,6944 & 0,0420 \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+\subsection{Bayesian Network: Varian \texttt{default}}
+
+Bayesian Network (\textit{Naive Bayes}, TAN, dan KDB) serta \texttt{GaussianNB}
+memakai varian \texttt{default}. CPT hanya dapat dibuat untuk fitur diskret.
+Karena itu, model ini mendiskretisasi setiap kolom ke dalam \texttt{n\_bins}
+\textit{bin} kuantil di dalam \texttt{fit} (Subbab~\ref{sec:bn}). Batas
+\textit{bin} juga dihitung hanya dari data latih.
+
+Diskretisasi kuantil hanya bergantung pada urutan nilai. Standardisasi tidak
+mengubah urutan, sehingga \textit{bin} yang terbentuk tetap sama. \textit{Capping}
+hanya mengubah nilai ekstrem yang sudah berada di \textit{bin} paling ujung. Skor
+varian \texttt{default} dan \texttt{tree} identik pada \textit{Naive Bayes} dan
+KDB (Tabel~\ref{tab:varian-holdout}). Hasil ini sesuai dengan dugaan tersebut.
+Bagi Bayesian Network, langkah yang berpengaruh adalah imputasi, \textit{encoding},
+dan fitur yang dipakai. Enam fitur turunan baru dibuang karena tidak menaikkan
+skor TAN pada 5-\textit{fold cross validation}. Fitur yang lebih banyak juga
+menambah jumlah CPT yang harus diestimasi dari data yang sama.
+
+\subsection{Decision Tree Learning: Varian \texttt{tree}}
+
+Setiap pemisahan pada pohon hanya membandingkan nilai satu fitur dengan ambang.
+Transformasi yang mempertahankan urutan, seperti standardisasi, tidak mengubah
+pemisahan yang dapat dibentuk. Karena itu, varian \texttt{tree} tidak memakai
+\textit{scaling}. Akibatnya, ambang pada pohon tetap berada dalam satuan asli,
+misalnya \texttt{days\_before\_arrival} $\le 149{,}5$ hari, sehingga pohon lebih
+mudah dibaca (Subbab~\ref{sec:hasil-dtl}).
+
+Varian \texttt{tree} juga tidak memakai \textit{capping}. Pohon tidak terpengaruh
+besarnya jarak nilai ekstrem dari nilai lain, karena nilai ekstrem hanya jatuh
+ke sisi ambang yang sesuai. Varian \texttt{default} memiliki kolom yang sama,
+tetapi memakai \textit{capping} dan standardisasi. Skor kedua varian setara:
+0,8255 untuk \texttt{tree} dan 0,8247 untuk \texttt{default} pada 5-\textit{fold}.
+Selisihnya (0,0008) jauh di bawah simpangan baku antar-\textit{fold} (0,0067), dan
+pada \textit{hold-out} urutannya terbalik. Varian \texttt{tree} dipertahankan karena ambangnya memakai
+nilai asli.
+
+\texttt{DTL} dapat menangani nilai kosong dan kategori teks sendiri. Walaupun
+begitu, varian \texttt{tree} tetap mengimputasi dan meng-\textit{encode} data,
+karena imputasi median kelompok memberi skor lebih tinggi
+(Tabel~\ref{tab:dtl-missing}). Seperti varian \texttt{default}, varian ini
+membuang enam fitur turunan baru karena fitur tersebut tidak menaikkan skor DTL
+pada 5-\textit{fold cross validation}.
+
+\subsection{K-Nearest Neighbors: Varian \texttt{knn}}
+
+KNN mengklasifikasikan baris berdasarkan jarak ke baris latih. Setiap kolom
+langsung berkontribusi pada jarak. Kolom yang rentangnya besar akan mendominasi
+jarak jika skalanya tidak disamakan. Varian \texttt{knn} memakai \textit{robust
+scaling}, yaitu $(x-\mathrm{median})/\mathrm{IQR}$. Median dan IQR tidak
+terpengaruh nilai ekstrem, sehingga skala kolom yang menceng, seperti harga dan
+\textit{lead time}, tidak ditentukan oleh segelintir baris ekstrem. Kolom dengan
+IQR nol dibagi 1, dan kolom biner, termasuk kolom \textit{one-hot}, tetap bernilai
+0/1. \textit{Capping} tetap dipakai agar baris dengan nilai ekstrem tidak terlalu
+jauh dari baris lain.
+
+Varian ini juga memakai enam fitur turunan baru (Tabel~\ref{tab:fitur-baru}).
+\textit{Smoothing} \texttt{date\_rate} diturunkan dari $m=20$ menjadi $m=5$,
+sehingga nilai fitur ini lebih mengikuti rasio pembatalan tanggal itu sendiri.
+Selain itu, model \texttt{KNN} memberi bobot pada setiap kolom saat menghitung
+jarak (Subbab~\ref{sec:knn}). Kolom hasil \textit{ordinal encoding} diberi bobot
+kecil (\texttt{meal\_package} 0,2 dan \texttt{room\_category} 0,25), karena
+selisih kodenya tidak selalu mencerminkan kemiripan yang sebenarnya.
+\texttt{date\_rate} diberi bobot 0,5, sedangkan keempat kolom siklik
+(\texttt{month\_sin}, \texttt{month\_cos}, \texttt{doy\_sin}, \texttt{doy\_cos})
+diberi bobot 0, sehingga kolom-kolom tersebut tidak dipakai dalam jarak.
+
+Pada Tabel~\ref{tab:varian-holdout}, \textit{robust scaling} unggul dari
+standardisasi sebesar 0,0062 pada 5-\textit{fold}, sedikit di atas simpangan baku
+antar-\textit{fold}. \textit{Capping} tidak mengubah skor KNN
+secara berarti (0,8378 dengan \textit{capping} dan 0,8381 tanpa
+\textit{capping}), karena \textit{robust scaling} sudah meredam pengaruh nilai
+ekstrem. Sebaliknya, enam fitur turunan baru tidak
+membantu KNN. Tanpa keenam fitur itu, skor naik 0,0068 pada \textit{hold-out} dan
+0,0065 pada 5-\textit{fold}, dan selisih 5-\textit{fold}-nya lebih besar daripada
+simpangan baku antar-\textit{fold}. Kemungkinan penyebabnya, sebagian fitur baru
+mengulang informasi yang sudah ada, misalnya \texttt{price\_per\_guest} dari harga
+dan jumlah tamu. Fitur berulang seperti ini memberi bobot ganda pada informasi
+yang sama dalam jarak Manhattan. Dugaan ini belum diuji per fitur. Konfigurasi
+pada \textit{notebook} masih memakai varian \texttt{knn}, karena $k$, ambang, dan
+bobot fitur dipilih pada varian tersebut. Varian tanpa fitur baru perlu
+di-\textit{tuning} ulang sebelum dipakai.
+
+\subsection{Logistic Regression: Varian \texttt{lr}}
+
+Logistic Regression memodelkan \textit{log-odds} pembatalan sebagai kombinasi
+linear fitur. Ada dua akibat dari bentuk ini. Pertama, kode \textit{ordinal}
+memaksa pengaruh kategori naik atau turun secara linear mengikuti urutan kode.
+Karena itu, varian \texttt{lr} memakai \textit{one-hot encoding} untuk ketiga
+atribut kategorikal, sehingga setiap kategori mendapat bobotnya sendiri. Kedua,
+fitur numerik hanya dapat berpengaruh secara monoton. Padahal, hubungan
+\textit{lead time} dan harga dengan pembatalan tidak harus monoton. Varian
+\texttt{lr} membagi sepuluh fitur numerik menjadi paling banyak 20 \textit{bin}
+kuantil, lalu meng-\textit{encode} setiap \textit{bin} dengan \textit{one-hot}.
+Batas \textit{bin} dipelajari dari \texttt{X\_train}. Fitur yang nilai uniknya
+sedikit menghasilkan \textit{bin} yang lebih sedikit, misalnya 12 \textit{bin}
+untuk \texttt{arrival\_month}. Setiap \textit{bin} mendapat bobot sendiri,
+sehingga model dapat membentuk fungsi tangga yang tidak linear. Kolom numerik
+aslinya tetap dipertahankan.
+
+Fitur lain mengikuti varian \texttt{knn}, ditambah penanda
+\texttt{special\_requests\_missing}. Semua kolom non-biner distandardisasi agar
+\textit{gradient} setiap bobot berada pada skala yang sama dan satu
+\textit{learning rate} dapat dipakai untuk semua bobot.
+
+Pada 5-\textit{fold}, varian \texttt{lr} memberi skor tertinggi (0,7169).
+\textit{Binning} menyumbang kenaikan terbesar, yaitu 0,0225 dibandingkan varian
+tanpa \textit{binning}. \textit{One-hot encoding} unggul 0,0071 dari
+\textit{ordinal encoding}, tetapi selisih ini masih di bawah simpangan baku.
+Pada \textit{hold-out}, varian \texttt{default} sedikit lebih tinggi (0,7629).
+Namun, varian ini paling tidak stabil antar-\textit{fold} ($\sigma=0{,}0420$).
+Logistic Regression \textit{from scratch} dilatih dengan \textit{stochastic
+gradient ascent} tanpa regularisasi. Karena itu, skornya pada satu pembagian data
+bervariasi cukup besar, dan rata-rata 5-\textit{fold} lebih dapat diandalkan.
+
+Varian \texttt{lr} adalah konfigurasi pembanding umum pada \textit{notebook}
+utama. Eksperimen submisi c010 memakai jalur fitur terpisah di
+\texttt{src/logistic\_submission.py} (Subbab~\ref{sec:lr-c010-features}). Karena
+itu, hasil eksperimen tersebut tidak dicampur dengan skor varian \texttt{lr} pada
+tabel perbandingan model.
+
+\subsection{Support Vector Machine: Varian \texttt{svm}}
+
+SVM RBF juga memakai jarak, yaitu $\exp(-\gamma\lVert x-z\rVert^2)$, dengan satu
+nilai $\gamma$ untuk semua kolom. Karena itu, kolom perlu berada pada skala yang
+sama, dan varian \texttt{svm} memakai standardisasi. Varian ini dibangun dari
+fitur varian \texttt{knn} dan penanda \texttt{special\_requests\_missing}. Varian
+ini juga menambahkan dua kelompok fitur berbasis label, yaitu \texttt{near\_*} dan
+\texttt{te\_*} (Subbab~\ref{sec:label}). Kernel RBF sulit mempelajari interaksi
+yang melibatkan kategori nominal atau pola per tanggal hanya dari jarak.
+\textit{Target encoding} meringkas interaksi tersebut menjadi satu angka per baris.
+Model terbaik memakai SVM RBF dengan $C=2$ dan $\gamma=0{,}035$ pada 61 kolom.
 
 \section{Pembagian Data}
 
@@ -118,6 +297,7 @@ ke setiap \textit{fold}. Dengan cara ini, proporsi kelas batal pada setiap
 \textit{fold} sama (32,8\%). \textit{Fold} pertama menjadi \texttt{X\_val}. Fungsi
 yang sama dipakai untuk \textit{k-fold cross validation} dan perhitungan
 \textit{out-of-fold} sehingga semua pembagian konsisten dan dapat direproduksi.
+Semua model memakai pembagian yang sama.
 
 \lstinputlisting[caption={Pembagian data \textit{stratified} (\texttt{src/preprocessing.py})},linerange={15-21,25-28}]{../src/preprocessing.py}
 
@@ -128,14 +308,17 @@ yang sama dipakai untuk \textit{k-fold cross validation} dan perhitungan
 Sebanyak 66 baris \texttt{train.csv} merupakan duplikat persis pada seluruh fitur,
 dan 41 di antaranya berada di \texttt{X\_train}. Baris tersebut dihapus dari
 \texttt{X\_train} melalui \texttt{drop\_duplicates} sehingga \texttt{X\_train}
-tersisa 21.857 baris. Duplikat membuat sampel tertentu berbobot ganda. Jika satu
-salinan masuk ke \textit{fold} latih dan salinan lain masuk ke \textit{fold}
-validasi, skor validasi juga menjadi terlalu tinggi. Duplikat pada \texttt{X\_val}
+tersisa 21.857 baris. Langkah ini dilakukan sebelum \texttt{Preprocessor}
+dijalankan, sehingga berlaku untuk semua model. Duplikat membuat sampel tertentu
+berbobot ganda. Jika satu salinan masuk ke \textit{fold} latih dan salinan lain
+masuk ke \textit{fold} validasi, skor validasi juga menjadi terlalu tinggi. Efek
+ini paling kuat pada model berbasis tetangga seperti KNN, karena salinan sebuah
+baris adalah tetangga terdekatnya dengan jarak nol. Duplikat pada \texttt{X\_val}
 dan \texttt{X\_test} tidak dihapus karena setiap baris pada kedua data itu tetap
 harus diprediksi.
 
 Karena hanya mencakup 0,2\% data latih, penghapusan duplikat hampir tidak
-mengubah skor (0,8662 pada 5-\textit{fold}, dibandingkan dengan 0,8661 tanpa
+mengubah skor SVM (0,8662 pada 5-\textit{fold}, dibandingkan dengan 0,8661 tanpa
 penghapusan). Langkah ini tetap dipakai saat evaluasi agar skor
 \textit{cross validation} tidak bias. Model akhir dilatih ulang pada seluruh
 \texttt{train.csv}. Pada tahap itu tidak ada lagi data validasi, sehingga
@@ -143,42 +326,51 @@ penghapusan duplikat tidak dijalankan.
 
 \subsection{Nilai Hilang}
 
-Delapan atribut memiliki nilai hilang (Tabel~\ref{tab:missing}). Imputasi
-dilakukan dalam dua tahap. Pada tahap pertama, \texttt{nightly\_rate\_idr} diisi
-dengan median harga per pasangan (\texttt{room\_category},
-\texttt{arrival\_month}), dan \texttt{days\_before\_arrival} diisi dengan median
-per pasangan (\texttt{booking\_channel}, \texttt{arrival\_month}). Harga kamar
-bergantung pada tipe kamar dan musim, sedangkan \textit{lead time} bergantung pada
-kanal pemesanan. Karena itu, median kelompok diharapkan lebih mendekati nilai
+Delapan atribut memiliki nilai hilang (Tabel~\ref{tab:missing}). Semua varian
+memakai imputasi yang sama, yang dilakukan dalam dua tahap. Pada tahap pertama,
+\texttt{nightly\_rate\_idr} diisi dengan median harga per pasangan
+(\texttt{room\_category}, \texttt{arrival\_month}), dan
+\texttt{days\_before\_arrival} diisi dengan median per pasangan
+(\texttt{booking\_channel}, \texttt{arrival\_month}). Harga kamar bergantung pada
+tipe kamar dan musim, sedangkan \textit{lead time} bergantung pada kanal
+pemesanan. Karena itu, median kelompok diharapkan lebih mendekati nilai
 sebenarnya daripada median global. Imputasi yang lebih teliti penting karena
 \texttt{days\_before\_arrival} merupakan fitur dengan korelasi terbesar terhadap
-target (0,44), dan \texttt{nightly\_rate\_idr} juga berkorelasi positif (0,13). Median kelompok yang sama dipakai untuk membuat
-fitur rasio \texttt{nightly\_rate\_idr\_ratio} dan
-\texttt{days\_before\_arrival\_ratio} (Tabel~\ref{tab:fitur-baru}).
+target (0,44), dan \texttt{nightly\_rate\_idr} juga berkorelasi positif (0,13).
+Median kelompok yang sama dipakai untuk membuat fitur rasio
+\texttt{nightly\_rate\_idr\_ratio} dan \texttt{days\_before\_arrival\_ratio}
+(Tabel~\ref{tab:fitur-baru}).
 
 Pada tahap kedua, nilai yang masih hilang diisi dengan median untuk fitur numerik
 dan modus untuk fitur kategorikal. Median dipilih karena tidak terpengaruh
-pencilan dan distribusi fitur yang menceng. Mengganti median dengan rata-rata
-menghasilkan skor yang setara (0,8661 pada 5-\textit{fold}) karena sebagian besar
-fitur yang hilang bernilai diskret kecil.
+pencilan dan distribusi fitur yang menceng. Pada SVM, mengganti median dengan
+rata-rata menghasilkan skor yang setara (0,8661 pada 5-\textit{fold}) karena
+sebagian besar fitur yang hilang bernilai diskret kecil.
 
-Sebelum imputasi, \texttt{special\_requests\_missing} bernilai 1 untuk baris yang
+Imputasi tetap diperlukan walaupun DTL dapat menangani nilai kosong sendiri.
+KNN, SVM, dan Logistic Regression membutuhkan matriks numerik tanpa nilai kosong
+untuk menghitung jarak dan perkalian bobot. Bayesian Network membutuhkan setiap
+nilai masuk ke salah satu \textit{bin}. Pada DTL, imputasi median kelompok memberi
+skor 5-\textit{fold} 0,0090 lebih tinggi daripada penanganan nilai kosong di
+dalam pohon (Tabel~\ref{tab:dtl-missing}).
+
+Sebelum imputasi, varian \texttt{lr} dan \texttt{svm} menambahkan
+\texttt{special\_requests\_missing}, yang bernilai 1 untuk baris yang
 \texttt{special\_requests}-nya kosong. Rasio pembatalan baris ini 40,8\%, lebih
 tinggi daripada rasio pembatalan baris yang terisi (32,0\%), sehingga ketiadaan
 nilai mengandung informasi. Median \texttt{special\_requests} adalah 0, dan rasio
 pembatalan baris dengan nilai 0 adalah 43,2\%. Imputasi dengan nilai 0 sudah
 mendekati perilaku baris yang hilang, dan penanda ini membuat model tetap dapat
-membedakan keduanya. Pada SVM, pengaruh penanda ini kecil (0,8663 tanpa penanda,
-selisihnya di bawah simpangan baku antar-\textit{fold}). Penanda ini dipertahankan
-karena konfigurasi \texttt{svm} dibangun dari varian \texttt{knn}. Varian tersebut
-memuat penanda ini bersama enam fitur turunan baru dan memberi skor KNN yang lebih
-tinggi daripada varian \texttt{default}.
+membedakan keduanya. Pada model linear, penanda ini memberi satu bobot tambahan
+khusus untuk baris yang kosong. Pada SVM, pengaruh penanda ini kecil (0,8663
+tanpa penanda, selisihnya di bawah simpangan baku antar-\textit{fold}). Penanda
+ini tetap dipertahankan karena hanya menambah satu kolom.
 
-Fitur berbasis label dihitung sebelum imputasi. Pada \textit{target encoding},
-nilai kosong menjadi kategori tersendiri. Pada pencarian \textit{near-duplicate},
-nilai kosong dianggap cocok dengan nilai apa pun. Jika dihitung setelah imputasi,
-nilai median kelompok yang sama akan membuat baris yang tidak berhubungan tampak
-cocok.
+Pada varian \texttt{svm}, fitur berbasis label dihitung sebelum imputasi. Pada
+\textit{target encoding}, nilai kosong menjadi kategori tersendiri. Pada pencarian
+\textit{near-duplicate}, nilai kosong dianggap cocok dengan nilai apa pun. Jika
+dihitung setelah imputasi, nilai median kelompok yang sama akan membuat baris yang
+tidak berhubungan tampak cocok.
 
 \paragraph{Harga Rp0.} Parameter \texttt{zero\_as\_missing} disediakan untuk
 memperlakukan nilai 0 sebagai nilai hilang, misalnya harga kamar Rp0. Data latih
@@ -191,10 +383,10 @@ Rp0 hanya 0,7\%, jauh di bawah rasio pembatalan baris lain (33,4\%).
 
 Pola ini menunjukkan bahwa Rp0 kemungkinan besar menandai kamar gratis, bukan
 harga yang tidak tercatat. Jika Rp0 diganti dengan median, informasi tersebut
-hilang. Kedua pilihan menghasilkan skor yang setara: 0,8662 pada
+hilang. Pada SVM, kedua pilihan menghasilkan skor yang setara: 0,8662 pada
 \textit{hold-out} dan 0,8662 pada 5-\textit{fold} jika Rp0 dipertahankan, serta
 0,8660 dan 0,8660 jika Rp0 dianggap nilai hilang. Karena skornya setara dan Rp0
-memiliki makna yang jelas, konfigurasi akhir mempertahankan Rp0 sebagai nilai asli
+memiliki makna yang jelas, semua varian mempertahankan Rp0 sebagai nilai asli
 (\texttt{zero\_as\_missing} kosong). Pada kunci harga \textit{target encoding} dan
 pencarian \textit{near-duplicate}, harga Rp0 tetap diperlakukan sebagai harga yang
 tidak diketahui karena logaritmanya tidak terdefinisi.
@@ -204,20 +396,40 @@ tidak diketahui karena logaritmanya tidak terdefinisi.
 Nilai \texttt{days\_before\_arrival} dan \texttt{nightly\_rate\_idr} dibatasi
 (\textit{capping}) ke rentang IQR
 $[Q_1-1{,}5\,\text{IQR},\ Q_3+1{,}5\,\text{IQR}]$ yang dihitung dari
-\texttt{X\_train}. Baris dengan nilai ekstrem tidak dibuang karena baris tersebut
-tetap valid dan harus diprediksi. Pembatasan ini mencegah nilai ekstrem
-mendominasi jarak pada KNN dan SVM RBF serta \textit{gradient} pada Logistic
-Regression. Pada SVM dengan konfigurasi akhir, skor dengan dan tanpa
-\textit{capping} setara (0,8662 dan 0,8664 pada 5-\textit{fold}). Informasi
-\textit{lead time} dan harga yang ekstrem sudah terwakili oleh fitur
-\texttt{te\_*} yang dihitung dari nilai sebelum \textit{capping}.
+\texttt{X\_train}. Pada \texttt{X\_train}, batas atasnya adalah 278 hari dan
+Rp2.959.000. Batas bawah \textit{lead time} bernilai negatif sehingga tidak
+pernah tercapai. Baris dengan nilai ekstrem tidak dibuang karena baris tersebut
+tetap valid dan harus diprediksi.
+
+\textit{Capping} dipakai oleh semua varian kecuali \texttt{tree}. Pengaruhnya
+berbeda untuk setiap model.
+\begin{itemize}
+	\item Pada KNN dan SVM RBF, \textit{capping} mencegah nilai ekstrem
+	mendominasi jarak.
+	\item Pada Logistic Regression, \textit{capping} mencegah nilai ekstrem
+	menghasilkan \textit{gradient} yang terlalu besar dan menggeser rata-rata
+	serta simpangan baku yang dipakai untuk standardisasi.
+	\item Pada Bayesian Network, nilai yang dibatasi tetap berada di \textit{bin}
+	paling ujung, sehingga pengaruhnya praktis tidak ada.
+	\item Pada DTL, \textit{capping} tidak diperlukan karena pemisahan hanya
+	bergantung pada urutan nilai.
+\end{itemize}
+Pada SVM dengan konfigurasi akhir, skor dengan dan tanpa \textit{capping} setara
+(0,8662 dan 0,8664 pada 5-\textit{fold}). Informasi \textit{lead time} dan harga
+yang ekstrem sudah terwakili oleh fitur \texttt{te\_*} yang dihitung dari nilai
+sebelum \textit{capping}. Pada model lain, \textit{capping} juga tidak mengubah
+skor secara berarti (Tabel~\ref{tab:varian-holdout}). Skor DTL dengan dan tanpa
+\textit{capping} berbeda 0,0008 pada 5-\textit{fold}, sedangkan skor KNN berbeda
+0,0003. Pada Bayesian Network, skornya identik.
 
 \section{Rekayasa Fitur}
 
 Fungsi \texttt{engineer} membuat fitur baru hanya dari nilai pada baris yang sama.
 Karena tidak memakai statistik dari baris lain, fungsi ini aman diterapkan ke data
 mana pun. Fitur rasio dan \texttt{date\_count} memakai statistik dari
-\texttt{X\_train}, tetapi tidak memakai label.
+\texttt{X\_train}, tetapi tidak memakai label. Bagian atas
+Tabel~\ref{tab:fitur-baru} dipakai semua varian. Bagian bawahnya hanya dipakai
+varian \texttt{knn}, \texttt{lr}, dan \texttt{svm}.
 
 \begin{table}[H]
 	\centering
@@ -242,29 +454,44 @@ mana pun. Fitur rasio dan \texttt{date\_count} memakai statistik dari
 		\texttt{price\_per\_guest} & \texttt{nightly\_rate\_idr} / $\max(1, \texttt{total\_guests})$; harga relatif terhadap jumlah tamu \\
 		\texttt{nightly\_rate\_idr\_ratio} & Harga dibagi median harga kelompok (\texttt{room\_category}, \texttt{arrival\_month}); menunjukkan apakah harga lebih mahal atau lebih murah daripada harga normal kamar itu pada bulan tersebut \\
 		\texttt{days\_before\_arrival\_ratio} & \textit{Lead time} dibagi median kelompok (\texttt{booking\_channel}, \texttt{arrival\_month}); menunjukkan apakah tamu memesan lebih awal daripada kebiasaan kanalnya \\
-		\texttt{special\_requests\_missing} & 1 jika \texttt{special\_requests} kosong \\
 		\bottomrule
 	\end{tabular}
 \end{table}
 
-Enam fitur baru dan penanda nilai hilang menaikkan \textit{macro F1} 5-\textit{fold}
-SVM dari 0,8210 menjadi 0,8255 (Tabel~\ref{tab:ablasi}). Varian \texttt{default}
-dan \texttt{tree} membuang fitur ini melalui parameter \texttt{drop} karena pada
-5-\textit{fold cross validation} fitur ini tidak menaikkan skor DTL maupun
-Bayesian Network TAN.
+Fitur turunan berguna dengan cara yang berbeda bagi setiap model. KNN dan SVM
+tidak dapat membentuk penjumlahan atau perkalian dua kolom dari jarak, sehingga
+fitur seperti \texttt{total\_nights} dan \texttt{lead\_x\_price} memberi
+informasi yang tidak tersedia secara langsung. Logistic Regression juga hanya
+dapat memodelkan interaksi jika interaksi itu disediakan sebagai kolom. Pohon
+keputusan dapat membentuk interaksi melalui pemisahan bertingkat. Namun, fitur
+seperti \texttt{total\_nights} memungkinkan pohon memakai satu pemisahan, bukan
+beberapa pemisahan.
+
+Pada SVM, enam fitur baru dan penanda nilai hilang menaikkan \textit{macro F1}
+5-\textit{fold} dari 0,8210 menjadi 0,8255 (Tabel~\ref{tab:ablasi}). Pada KNN,
+efeknya berlawanan: membuang keenam fitur ini menaikkan skor 5-\textit{fold} dari
+0,8378 menjadi 0,8443 (Subbab~\ref{sec:varian}). Jadi, fitur yang membantu satu
+model belum tentu membantu model lain. Hal ini menjadi alasan setiap model
+memiliki varian sendiri. Varian \texttt{default} dan \texttt{tree} membuang fitur ini melalui parameter
+\texttt{drop}. Pada 5-\textit{fold cross validation}, fitur ini tidak menaikkan
+skor DTL maupun Bayesian Network TAN.
 
 \lstinputlisting[caption={Rekayasa fitur (\texttt{src/preprocessing.py})},linerange={66-68,87-99}]{../src/preprocessing.py}
 
 \section{Fitur Berbasis Label}
+\label{sec:label}
 
-Konfigurasi \texttt{svm} menambahkan tiga kelompok fitur yang dihitung dari label
-\texttt{X\_train}. Nilai fitur ini pada \texttt{X\_train} dihitung secara
-\textit{out-of-fold}. \texttt{X\_train} dibagi menjadi lima \textit{fold} dengan
-\texttt{stratified\_folds}, dan setiap baris mendapat nilai dari statistik yang
-dihitung tanpa \textit{fold}-nya sendiri. \texttt{X\_val} dan \texttt{X\_test}
-memakai statistik dari seluruh \texttt{X\_train}. Tanpa langkah ini, label setiap
-baris ikut masuk ke fiturnya sendiri. Model akan belajar menyalin fitur tersebut,
-dan skor validasi menjadi bias.
+Ada tiga kelompok fitur yang dihitung dari label \texttt{X\_train}. Semua varian
+memakai \texttt{date\_rate}. Hanya varian \texttt{svm} yang memakai
+\texttt{near\_*} dan \texttt{te\_*}. Nilai fitur ini pada \texttt{X\_train}
+dihitung secara \textit{out-of-fold}. \texttt{X\_train} dibagi menjadi lima
+\textit{fold} dengan \texttt{stratified\_folds}, dan setiap baris mendapat nilai
+dari statistik yang dihitung tanpa \textit{fold}-nya sendiri. \texttt{X\_val} dan
+\texttt{X\_test} memakai statistik dari seluruh \texttt{X\_train}. Tanpa langkah
+ini, label setiap baris ikut masuk ke fiturnya sendiri. Model akan belajar
+menyalin fitur tersebut, dan skor validasi menjadi bias. Risiko ini berlaku untuk
+semua model, tetapi paling besar pada model yang mudah \textit{overfit}, seperti
+pohon keputusan yang dalam dan KNN dengan $k$ kecil.
 
 \subsection{Rasio Pembatalan per Tanggal Kedatangan}
 
@@ -274,9 +501,11 @@ dengan \textit{smoothing}:
 	\label{eq:te}
 	\texttt{date\_rate}(d)=\frac{\sum_{k:\,\text{tanggal}_k=d}y_k+m\,\bar{y}}{n_d+m},
 \end{equation}
-dengan $n_d$ jumlah pemesanan pada tanggal $d$, $\bar{y}$ rasio pembatalan global,
-dan $m=20$. \textit{Smoothing} menarik nilai tanggal yang jarang muncul ke arah
-rata-rata global.
+dengan $n_d$ jumlah pemesanan pada tanggal $d$ dan $\bar{y}$ rasio pembatalan
+global. \textit{Smoothing} menarik nilai tanggal yang jarang muncul ke arah
+rata-rata global. Nilai $m=20$ dipakai semua varian kecuali \texttt{knn}, yang
+memakai $m=5$. Varian \texttt{lr} juga membagi \texttt{date\_rate} menjadi
+\textit{bin} kuantil.
 
 \subsection{Pemesanan Serupa (\textit{Near-Duplicate})}
 
@@ -317,8 +546,8 @@ toleransi 10\%. Rasio pembatalan baris yang memiliki tetangga juga lebih tinggi
 uji: 37,8\% baris \texttt{test.csv} memiliki tetangga di \texttt{train.csv}
 (43,1\% dengan toleransi 10\%). Dua toleransi dipakai bersama-sama. Toleransi 3\%
 lebih tepat, sedangkan toleransi 10\% mencakup lebih banyak baris, dan model
-menentukan bobot keduanya. Fitur ini merupakan langkah dengan kenaikan terbesar:
-\textit{macro F1} 5-\textit{fold} naik dari 0,8255 menjadi 0,8563.
+menentukan bobot keduanya. Pada SVM, fitur ini merupakan langkah dengan kenaikan
+terbesar: \textit{macro F1} 5-\textit{fold} naik dari 0,8255 menjadi 0,8563.
 
 \lstinputlisting[caption={Pencarian pemesanan serupa (\texttt{src/preprocessing.py})},linerange={43-63}]{../src/preprocessing.py}
 
@@ -348,7 +577,7 @@ menggabungkan fitur yang paling berpengaruh pada analisis data, yaitu
 
 \begin{table}[H]
 	\centering
-	\caption{Kunci \textit{target encoding} pada konfigurasi \texttt{svm}}
+	\caption{Kunci \textit{target encoding} pada varian \texttt{svm}}
 	\label{tab:te-kunci}
 	\small
 	\begin{tabular}{l p{10.5cm}}
@@ -362,7 +591,7 @@ menggabungkan fitur yang paling berpengaruh pada analisis data, yaitu
 	\end{tabular}
 \end{table}
 
-Enam belas kunci tanpa harga menaikkan \textit{macro F1} 5-\textit{fold} dari
+Enam belas kunci tanpa harga menaikkan \textit{macro F1} 5-\textit{fold} SVM dari
 0,8563 menjadi 0,8640. Empat kunci harga menaikkannya lagi menjadi 0,8662.
 Korelasi linear harga dengan pembatalan hanya 0,13 karena arti sebuah harga
 bergantung pada tipe kamar, musim, kanal, dan \textit{lead time}. Harga yang sama
@@ -374,37 +603,100 @@ langsung.
 \lstinputlisting[caption={Kunci \textit{target encoding} (\texttt{src/preprocessing.py})},linerange={71,76-83}]{../src/preprocessing.py}
 \lstinputlisting[caption={Statistik berbasis label secara \textit{out-of-fold} (\texttt{src/preprocessing.py})},linerange={167-189,194-199,201-204}]{../src/preprocessing.py}
 
-\section{\textit{Encoding} dan \textit{Scaling}}
+\section{\textit{Encoding}, \textit{Binning}, dan \textit{Scaling}}
 
-Atribut \texttt{meal\_package} (Room Only $<$ Breakfast $<$ Half Board $<$ Full
-Board) dan \texttt{room\_category} (Type A $<$ \dots{} $<$ Type G) diubah dengan
-\textit{ordinal encoding}. Atribut \texttt{meal\_package} memiliki urutan tingkat
-layanan. Huruf \texttt{room\_category} tidak menunjukkan urutan, tetapi
-\textit{ordinal encoding} menjaga jumlah kolom tetap kecil, dan interaksi tipe
-kamar sudah diwakili oleh kunci \textit{target encoding} yang memuat
-\texttt{room\_category}. Atribut \texttt{booking\_channel} tidak memiliki urutan
-sehingga diubah dengan \textit{one-hot encoding}. Daftar kategorinya dipelajari
-dari \texttt{X\_train}. Kolom \texttt{X\_val} dan \texttt{X\_test} kemudian
-disamakan dengan \texttt{reindex}, dan kategori yang tidak muncul di
-\texttt{X\_train} menjadi vektor nol.
+\paragraph{\textit{Encoding}.} Dataset memiliki tiga atribut kategorikal. Atribut
+\texttt{booking\_channel} tidak memiliki urutan sehingga diubah dengan
+\textit{one-hot encoding} pada semua varian. Atribut \texttt{meal\_package}
+(Room Only $<$ Breakfast $<$ Half Board $<$ Full Board) dan
+\texttt{room\_category} (Type A $<$ \dots{} $<$ Type G) diubah dengan
+\textit{ordinal encoding} pada semua varian kecuali \texttt{lr}. Atribut
+\texttt{meal\_package} memiliki urutan tingkat layanan. Huruf
+\texttt{room\_category} tidak menunjukkan urutan, tetapi \textit{ordinal encoding}
+menjaga jumlah kolom tetap kecil. Bagi DTL, satu kolom ordinal tetap dapat
+dipisah di ambang mana pun. Bagi Bayesian Network, setiap kode menjadi satu nilai
+diskret tersendiri, karena jumlah nilai uniknya tidak lebih dari \texttt{n\_bins}.
+Bagi KNN, bobot jarak kolom ini diperkecil. Bagi SVM, interaksi tipe kamar sudah
+diwakili oleh kunci \textit{target encoding} yang memuat \texttt{room\_category}.
+Varian \texttt{lr} memakai \textit{one-hot encoding} untuk ketiganya. Daftar
+kategori dipelajari dari \texttt{X\_train}. Kolom \texttt{X\_val} dan
+\texttt{X\_test} kemudian disamakan dengan \texttt{reindex}, dan kategori yang
+tidak muncul di \texttt{X\_train} menjadi vektor nol.
 
-Setelah \textit{encoding}, semua kolom distandardisasi menjadi $(x-\mu)/\sigma$
-dengan $\mu$ dan $\sigma$ dari \texttt{X\_train}. KNN dan SVM RBF memakai jarak
-Euclidean, sedangkan Logistic Regression dilatih dengan \textit{gradient descent}.
-Tanpa standardisasi, harga kamar yang bernilai jutaan akan mengalahkan fitur yang
-bernilai satuan. Hal ini penting bagi SVM RBF karena $\gamma$ berlaku sama untuk
-semua kolom. \texttt{Preprocessor} juga menyediakan opsi \texttt{minmax} dan
-\texttt{robust}. Hasil akhir konfigurasi \texttt{svm} terdiri atas 61 kolom.
+\paragraph{\textit{Binning} dan diskretisasi.} Dua model memakai fitur numerik
+dalam bentuk \textit{bin} kuantil, dengan batas yang dipelajari dari data latih.
+Varian \texttt{lr} menambahkan \textit{bin} sebagai kolom \textit{one-hot} di
+dalam \texttt{Preprocessor} dan tetap mempertahankan kolom aslinya. Bayesian
+Network mendiskretisasi semua kolom di dalam model, sehingga matriks dari
+\texttt{Preprocessor} tetap kontinu.
+
+\paragraph{\textit{Scaling}.} Setelah \textit{encoding}, kolom di-\textit{scale}
+dengan statistik dari \texttt{X\_train}.
+\begin{itemize}
+	\item Standardisasi $(x-\mu)/\sigma$ dipakai varian \texttt{default},
+	\texttt{lr}, dan \texttt{svm}. SVM RBF memakai satu $\gamma$ untuk semua
+	kolom, sedangkan Logistic Regression dilatih dengan \textit{gradient}.
+	Tanpa standardisasi, harga kamar yang bernilai jutaan akan mengalahkan fitur
+	yang bernilai satuan.
+	\item \textit{Robust scaling} $(x-\mathrm{median})/\mathrm{IQR}$ dipakai varian
+	\texttt{knn} agar skala jarak tidak ditentukan oleh nilai ekstrem.
+	\item Varian \texttt{tree} tidak memakai \textit{scaling}.
+\end{itemize}
+Pada standardisasi dan \textit{robust scaling}, kolom biner, termasuk kolom
+\textit{one-hot}, tidak diubah dan tetap bernilai 0/1. Kolom dengan sebaran nol
+dibagi 1. \texttt{Preprocessor} juga menyediakan opsi \texttt{minmax}. Jumlah kolom
+akhir setiap varian tercantum pada Tabel~\ref{tab:varian-prep}.
 
 \lstinputlisting[caption={\texttt{Preprocessor.fit} dan \texttt{transform} (\texttt{src/preprocessing.py})},linerange={103,109-117,120-148,151-154}]{../src/preprocessing.py}
 \lstinputlisting[caption={Fitur sebelum imputasi dan imputasi kelompok (\texttt{src/preprocessing.py})},linerange={208-231}]{../src/preprocessing.py}
 
-\section{Ringkasan Pengaruh \textit{Preprocessing}}
+\section{Fitur Eksperimen Logistic Regression c010}
+\label{sec:lr-c010-features}
 
-Tabel~\ref{tab:ablasi} merangkum pengaruh setiap langkah pada SVM RBF ($C=2$,
-$\gamma=0{,}025$) dengan prosedur evaluasi di awal bab ini. Bagian atas tabel
-menambahkan langkah secara bertahap, sedangkan bagian bawah mengubah satu pilihan
-pada konfigurasi akhir.
+Eksperimen c010 membandingkan tiga \textit{solver} pada matriks fitur yang sama.
+Fitur awal mencakup transformasi siklik bulan dan hari kedatangan, logaritma
+\textit{lead time} dan harga, serta interaksi pasangan fitur numerik. Matriks
+tersebut ditambah fitur kemiripan radial terhadap titik acuan yang dipilih secara
+acak dengan \textit{seed} tetap, fitur statistik untuk kombinasi atribut
+pemesanan, statistik pada jendela tanggal atau nilai numerik yang berdekatan,
+dan fitur kepadatan tetangga kelas 0 dan 1.
+
+Fitur statistik kombinasi menggunakan \textit{smoothing} bernilai 5 dan
+menyertakan jumlah baris pada setiap kombinasi. Statistik kombinasi, jendela,
+dan kepadatan untuk data latih dihitung secara \textit{out-of-fold} dengan lima
+\textit{fold} terstratifikasi dan \textit{seed} 42. Dengan demikian, label
+suatu baris tidak dipakai untuk membuat fitur baris itu sendiri. Fitur validasi
+dan uji dihitung memakai seluruh bagian data latih yang tersedia.
+
+Pada konfigurasi c010, fitur konteks, jendela, dan kepadatan diaktifkan.
+Kepadatan dihitung dari banyaknya contoh kelas 0 dan kelas 1 dalam radius
+tertentu pada ruang fitur lokal. Implementasi \texttt{cKDTree} dari SciPy hanya
+mempercepat pencarian tetangga tersebut; fungsi objektif Logistic Regression
+dan seluruh \textit{solver} tetap dihitung sendiri dengan NumPy. Jadi, ketiga
+\textit{solver} menerima representasi fitur yang identik dan perbandingan
+berfokus pada proses optimisasinya.
+
+\section{Ablasi \textit{Preprocessing} pada SVM}
+\label{sec:ablasi}
+
+Varian \texttt{svm} memuat hampir semua langkah \texttt{Preprocessor}. Varian
+ini juga dibangun bertahap dari varian \texttt{default}. Karena itu, pengaruh
+setiap langkah diukur pada SVM RBF. Eksperimen ini mempertahankan $C=2$ dan
+$\gamma=0{,}025$ agar setiap perubahan fitur dibandingkan pada konfigurasi model
+yang tetap. Skor dihitung dengan dua cara.
+\begin{enumerate}
+	\item \textit{Hold-out}: \texttt{Preprocessor} di-\textit{fit} pada
+	\texttt{X\_train}, lalu model diuji pada \texttt{X\_val}.
+	\item 5-\textit{fold}: \texttt{train.csv} dibagi menjadi lima \textit{fold}.
+	Pada setiap \textit{fold}, duplikat dihapus dan \texttt{Preprocessor}
+	di-\textit{fit} ulang hanya pada empat \textit{fold} latih. Dengan cara ini,
+	fitur berbasis label tidak pernah melihat label \textit{fold} uji.
+\end{enumerate}
+Skor dihitung dengan \texttt{SVC} scikit-learn karena lebih cepat dan
+menghasilkan skor yang identik dengan SVM \textit{from scratch}
+(Tabel~\ref{tab:perbandingan}). Bagian atas Tabel~\ref{tab:ablasi} menambahkan
+langkah secara bertahap, sedangkan bagian bawah mengubah satu pilihan pada
+konfigurasi akhir.
 
 \begin{table}[H]
 	\centering
@@ -419,7 +711,7 @@ pada konfigurasi akhir.
 		+ fitur baru dan penanda nilai hilang          & 37 & 0,8266 & 0,8255 & 0,0038 \\
 		+ \texttt{near\_*}                             & 41 & 0,8595 & 0,8563 & 0,0047 \\
 		+ 16 \texttt{te\_*} tanpa harga                & 57 & 0,8633 & 0,8640 & 0,0041 \\
-		+ 4 \texttt{te\_*} harga (konfigurasi akhir)   & 61 & \textbf{0,8662} & \textbf{0,8662} & 0,0040 \\
+		+ 4 \texttt{te\_*} harga (varian \texttt{svm}) & 61 & \textbf{0,8662} & \textbf{0,8662} & 0,0040 \\
 		\midrule
 		Tanpa penghapusan duplikat                     & 61 & 0,8679 & 0,8661 & 0,0037 \\
 		Rp0 sebagai nilai hilang                       & 61 & 0,8660 & 0,8660 & 0,0038 \\
@@ -435,10 +727,18 @@ Kenaikan skor hampir seluruhnya berasal dari rekayasa fitur. Fitur
 diikuti \textit{target encoding} (+0,010) dan fitur turunan baru (+0,005). Ketiga
 kenaikan ini jauh lebih besar daripada simpangan baku antar-\textit{fold}
 (sekitar 0,004). Sebaliknya, semua pilihan pada bagian bawah tabel hanya mengubah
-skor 5-\textit{fold} paling banyak 0,0003. Pilihan \textit{cleaning} tersebut
-dipertahankan berdasarkan alasan pada setiap subbab: evaluasi tanpa bias,
-makna Rp0, ketahanan median terhadap pencilan, serta konsistensi dengan varian
-model lain.
+skor 5-\textit{fold} paling banyak 0,0003.
+
+Pola yang sama terlihat pada model lain (Tabel~\ref{tab:varian-holdout}).
+Pilihan \textit{cleaning} dan \textit{scaling} yang tidak mengubah urutan nilai,
+seperti \textit{capping} dan standardisasi, praktis tidak mengubah skor DTL dan
+Bayesian Network. Perubahan yang paling berpengaruh adalah perubahan pada
+representasi fitur, misalnya \textit{binning} pada Logistic Regression (+0,0225),
+fitur turunan baru pada KNN ($-0{,}0065$), dan jenis \textit{scaling} pada KNN
+(+0,0062 untuk \textit{robust scaling}). Pilihan
+\textit{cleaning} tetap dipertahankan berdasarkan alasan pada setiap subbab:
+evaluasi tanpa bias, makna Rp0, ketahanan median terhadap pencilan, serta
+kebutuhan algoritma yang memakai jarak atau \textit{gradient}.
 
 \section{Seleksi Fitur dan Reduksi Dimensi}
 \label{sec:seleksi}
@@ -451,35 +751,39 @@ Seleksi fitur dilakukan dengan bantuan model pemeringkat. Model dilatih sekali
 dengan seluruh fitur, lalu fitur diurutkan berdasarkan
 \texttt{feature\_importances\_} atau $|\texttt{coef\_}|$. Model kemudian dilatih
 ulang dengan $k$ fitur teratas. Secara bawaan, model pemeringkat adalah model itu
-sendiri. KNN memakai DTL (\texttt{criterion="entropy"}, \texttt{max\_depth} $=10$,
-\texttt{min\_samples\_split} $=50$) sebagai pemeringkat karena KNN tidak memiliki
-bobot fitur. Pada \texttt{X\_train}, lima fitur terpenting menurut pemeringkat ini
-adalah \texttt{days\_before\_arrival} (0,277), \texttt{lead\_x\_price} (0,140),
-\texttt{special\_requests} (0,119), \texttt{booking\_channel} Online Travel Agent
-(0,117), dan \texttt{date\_rate} (0,095). Untuk SVM, urutan fitur dapat diambil dari $|w|$
-SVM linear ($w=\sum\alpha_i y_i x_i$) karena SVM RBF tidak memiliki bobot
-eksplisit. Model terbaik tidak memakai seleksi fitur maupun PCA karena seluruh 61
-kolom dipakai langsung oleh SVM RBF.
+sendiri. DTL memakai \texttt{feature\_importances\_}, sedangkan Logistic
+Regression memakai $|\texttt{coef\_}|$. KNN memakai DTL (\texttt{criterion="entropy"},
+\texttt{max\_depth} $=10$, \texttt{min\_samples\_split} $=50$) sebagai
+pemeringkat karena KNN tidak memiliki bobot fitur. Pada \texttt{X\_train}, lima
+fitur terpenting menurut pemeringkat ini adalah \texttt{days\_before\_arrival}
+(0,277), \texttt{lead\_x\_price} (0,140), \texttt{special\_requests} (0,119),
+\texttt{booking\_channel} Online Travel Agent (0,117), dan \texttt{date\_rate}
+(0,095). Untuk SVM, urutan fitur dapat diambil dari $|w|$ SVM linear
+($w=\sum\alpha_i y_i x_i$) karena SVM RBF tidak memiliki bobot eksplisit.
 
 PCA dihitung dari \textit{eigenvector} matriks kovarians. Jika $n<1$, jumlah
 komponen dipilih sampai proporsi variansi kumulatif mencapai $n$. Jika $n\ge1$,
-PCA memakai tepat $n$ komponen.
+PCA memakai tepat $n$ komponen. Konfigurasi utama semua model tidak memakai
+seleksi fitur maupun PCA. Seleksi fitur hanya dipakai pada eksperimen pembanding,
+yaitu KNN scikit-learn dengan 12 fitur dan SVM linear
+(Subbab~\ref{sec:hasil-svm-seleksi}).
 
 \lstinputlisting[caption={PCA dan \texttt{Pipeline} (\texttt{src/preprocessing.py})},linerange={257-271,274,276-307}]{../src/preprocessing.py}
 
 \section{Penanganan Ketidakseimbangan Kelas}
 
 Variabel \texttt{METHOD} di \textit{notebook} menentukan penanganan
-ketidakseimbangan kelas, yaitu \texttt{None}, \texttt{'smote'}, atau
-\texttt{'undersample'}. \textit{Resampling} dijalankan di dalam \texttt{fit}
-setelah \textit{preprocessing} dan hanya diterapkan pada data latih sehingga
-distribusi kelas pada data validasi tidak berubah. SMOTE menambah sampel sintetis
-kelas batal dengan interpolasi antara sampel kelas batal dan tetangga terdekatnya,
-sedangkan \textit{random undersampling} membuang sebagian sampel kelas tidak batal
-secara acak. Keduanya membuat proporsi kelas pada data latih menjadi 50:50.
+ketidakseimbangan kelas untuk semua model, yaitu \texttt{None}, \texttt{'smote'},
+atau \texttt{'undersample'}. \textit{Resampling} dijalankan di dalam fungsi
+\texttt{fit} setelah \textit{preprocessing} dan hanya diterapkan pada data latih,
+sehingga distribusi kelas pada data validasi tidak berubah. SMOTE menambah sampel
+sintetis kelas batal dengan interpolasi antara sampel kelas batal dan salah satu
+dari lima tetangga terdekatnya, sedangkan \textit{random undersampling} membuang
+sebagian sampel kelas tidak batal secara acak. Keduanya membuat proporsi kelas
+pada data latih menjadi 50:50.
 
 Ketiga pilihan dibandingkan dengan SVM RBF ($C=2$, $\gamma=0{,}025$) dan
-konfigurasi \texttt{svm} (Tabel~\ref{tab:imbalance}). Kolom \textit{precision} dan
+varian \texttt{svm} (Tabel~\ref{tab:imbalance}). Kolom \textit{precision} dan
 \textit{recall} mengacu pada kelas batal di \texttt{X\_val}.
 
 \begin{table}[H]
@@ -509,11 +813,16 @@ dengan \textit{undersampling}, padahal proporsi pembatalan sebenarnya 32,8\%.
 \textit{hold-out} maupun pada 5-\textit{fold}, dengan selisih sekitar 0,006--0,009
 yang lebih besar daripada simpangan baku antar-\textit{fold}.
 
-Karena itu, konfigurasi akhir memakai \texttt{METHOD = None}. Dengan perbandingan
-kelas sekitar 2:1, SVM tanpa \textit{resampling} sudah mendeteksi 78,7\%
-pembatalan. \textit{Resampling} menggeser model ke arah memprediksi batal lebih
-sering daripada proporsi sebenarnya. SMOTE juga membuat sampel sintetis dengan
-interpolasi, sehingga nilai fitur berbasis label (\texttt{near\_*} dan
-\texttt{te\_*}) pada sampel tersebut tidak berasal dari pemesanan yang nyata.
-\textit{Undersampling} memang mempercepat pelatihan karena data latihnya paling
-sedikit, tetapi sebagian besar informasi kelas tidak batal terbuang.
+Karena itu, semua model memakai \texttt{METHOD = None}. Dengan perbandingan kelas
+sekitar 2:1, SVM tanpa \textit{resampling} sudah mendeteksi 78,7\% pembatalan.
+\textit{Resampling} menggeser model ke arah memprediksi batal lebih sering
+daripada proporsi sebenarnya. Model lain menangani ketidakseimbangan kelas dengan
+cara yang tidak mengubah data latih. KNN memakai ambang probabilitas 0,45, dan
+Bayesian Network menyediakan klasifikasi sensitif-biaya. SMOTE juga membuat sampel
+sintetis dengan interpolasi. Akibatnya, nilai fitur berbasis label
+(\texttt{date\_rate}, \texttt{near\_*}, dan \texttt{te\_*}) pada sampel tersebut
+tidak berasal dari pemesanan yang nyata. Sampel sintetis juga tidak cocok untuk
+kolom diskret, seperti kolom \textit{one-hot} pada varian \texttt{lr}, karena
+interpolasi menghasilkan nilai pecahan. \textit{Undersampling} memang mempercepat
+pelatihan, terutama untuk KNN dan SVM yang biayanya bergantung pada jumlah data
+latih. Namun, sebagian besar informasi kelas tidak batal terbuang.

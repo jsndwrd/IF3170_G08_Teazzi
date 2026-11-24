@@ -1,7 +1,11 @@
-Program ditulis dalam Python dan disimpan di folder \texttt{src/}. Model
-\textit{from scratch} hanya memakai NumPy~\cite{numpy2026docs}. Scikit-learn dipakai untuk pembagian
-data, perhitungan metrik, dan model pembanding~\cite{sklearn2026docs}. Alur
-kerja mengikuti tahapan CRISP-DM dan dijalankan dari \texttt{src/main.ipynb}.
+Program ditulis dalam Python dan disimpan di folder \texttt{src/}. Operasi
+matematika pada model dan \textit{solver} \textit{from scratch} dihitung dengan
+NumPy~\cite{numpy2026docs}. Pada eksperimen fitur Logistic Regression c010,
+SciPy \texttt{cKDTree} hanya dipakai untuk menghitung banyaknya tetangga sebagai
+fitur kepadatan, bukan untuk melatih model atau mencari parameter
+\cite{scipy2026ckdtree}. Scikit-learn dipakai untuk pembagian data, perhitungan
+metrik, dan model pembanding~\cite{sklearn2026docs}. Alur kerja mengikuti
+tahapan CRISP-DM dan dijalankan dari \texttt{src/main.ipynb}.
 Potongan kode pada bab ini diambil langsung dari \textit{repository}.
 
 \section{Struktur Program}

@@ -943,7 +943,7 @@ def run_three_solver_submissions(
             "model": name,
             "validation_seed": validation_seed,
             "validation_size": validation_size,
-            "l2_strength": strength,
+            "C": strength,
             "threshold": threshold,
             "feature_options": ";".join(
                 f"{key}={value}" for key, value in sorted(feature_options.items())
