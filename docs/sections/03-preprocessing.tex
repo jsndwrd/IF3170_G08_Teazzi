@@ -1,9 +1,11 @@
 Seluruh tahap \textit{cleaning} dan \textit{preprocessing} berada di
 \texttt{src/preprocessing.py} dan diatur melalui kelas \texttt{Preprocessor} di
 \textit{notebook}. Bab ini menjelaskan konfigurasi \texttt{svm}, yaitu
-\textit{preprocessing} yang dipakai model dengan skor terbaik (SVM RBF, $C=2$,
-$\gamma=0{,}025$). Model lain memakai varian yang lebih sederhana dari kelas yang
-sama (Tabel~\ref{tab:varian-prep}).
+\textit{preprocessing} yang dipakai SVM RBF pada grid terbaru (hasil terbaik:
+$C=2$, $\gamma=0{,}035$). Eksperimen ablasi di bab ini mempertahankan
+$\gamma=0{,}025$ agar setiap perubahan fitur dibandingkan pada konfigurasi
+model yang tetap. Model lain memakai varian yang lebih sederhana dari kelas
+yang sama (Tabel~\ref{tab:varian-prep}).
 
 Untuk mencegah \textit{data leakage}, data dibagi terlebih dahulu. Setelah itu,
 setiap statistik (nilai imputasi, batas pencilan, daftar kategori, rata-rata,
