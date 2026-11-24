@@ -306,31 +306,8 @@ selesai dibangun dan dipangkas, skor dinormalkan agar jumlahnya 1 dan disimpan d
 \texttt{feature\_importances\_}. Ukuran ini sama dengan \textit{mean decrease in
 impurity} pada scikit-learn. \texttt{Pipeline} memakai atribut ini untuk seleksi
 fitur (Subbab~\ref{sec:seleksi}). Misalnya, KNN memakai
-\texttt{DTL(max\_depth=10, min\_samples\_split=50)} sebagai pemeringkat. Pada
-\texttt{X\_train}, lima fitur terpenting adalah \texttt{days\_before\_arrival}
-(0,277), \texttt{lead\_x\_price} (0,140), \texttt{special\_requests} (0,119),
-\texttt{booking\_channel} Online Travel Agent (0,117), dan \texttt{date\_rate}
-(0,095).
-
-\subsection{Verifikasi}
-
-Dengan \texttt{criterion="entropy"} dan \texttt{max\_depth} $=10$, \texttt{DTL}
-dibandingkan dengan \texttt{DecisionTreeClassifier} scikit-learn pada data dan
-parameter yang sama. Prediksi kedua model sama pada 99,6\% baris \texttt{X\_val}.
-\textit{Macro F1} \textit{hold-out} adalah 0,8355 untuk \texttt{DTL} dan 0,8371
-untuk scikit-learn, sedangkan rata-rata 5-\textit{fold} adalah 0,8220 dan 0,8224.
-Perbedaan ini berasal dari cara memilih di antara pemisahan yang \textit{gain}-nya
-sama. Scikit-learn mengacak urutan fitur sehingga hasilnya juga berubah menurut
-\texttt{random\_state}: dengan \textit{seed} 0 sampai 4, \textit{macro F1}
-\textit{hold-out}-nya berkisar 0,8343--0,8357. Skor \texttt{DTL} berada di dalam
-rentang tersebut. Sebagai gantinya, \texttt{DTL} memilih fitur dengan indeks
-terkecil sehingga hasilnya selalu sama.
-
-\lstinputlisting[caption={Pelatihan pohon (\texttt{src/models/dtl.py})},linerange={7,9-10,13-21,32-43}]{../src/models/dtl.py}
-
-\lstinputlisting[caption={\textit{Impurity} dan pencarian pemisahan terbaik (\texttt{src/models/dtl.py})},linerange={46-52,55-72}]{../src/models/dtl.py}
-
-\lstinputlisting[caption={Prediksi DTL (\texttt{src/models/dtl.py})},linerange={24-25,28-29,74-79}]{../src/models/dtl.py}
+\texttt{DTL(criterion="entropy", max\_depth=10, min\_samples\_split=50)} sebagai
+pemeringkat.
 
 \section{Bayesian Network}
 \label{sec:bn}
