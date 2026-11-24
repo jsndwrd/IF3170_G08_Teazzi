@@ -372,7 +372,7 @@ fitur harga kontinu tidak dapat menangkap ketergantungan ini, sedangkan kunci
 langsung.
 
 \lstinputlisting[caption={Kunci \textit{target encoding} (\texttt{src/preprocessing.py})},linerange={71,76-83}]{../src/preprocessing.py}
-\lstinputlisting[caption={Statistik berbasis label secara \textit{out-of-fold} (\texttt{src/preprocessing.py})},linerange={164-186,188-199}]{../src/preprocessing.py}
+\lstinputlisting[caption={Statistik berbasis label secara \textit{out-of-fold} (\texttt{src/preprocessing.py})},linerange={167-189,194-199,201-204}]{../src/preprocessing.py}
 
 \section{\textit{Encoding} dan \textit{Scaling}}
 
@@ -396,8 +396,8 @@ bernilai satuan. Hal ini penting bagi SVM RBF karena $\gamma$ berlaku sama untuk
 semua kolom. \texttt{Preprocessor} juga menyediakan opsi \texttt{minmax} dan
 \texttt{robust}. Hasil akhir konfigurasi \texttt{svm} terdiri atas 61 kolom.
 
-\lstinputlisting[caption={\texttt{Preprocessor.fit} dan \texttt{transform} (\texttt{src/preprocessing.py})},linerange={103,109-117,120-145,148-151}]{../src/preprocessing.py}
-\lstinputlisting[caption={Fitur sebelum imputasi dan imputasi kelompok (\texttt{src/preprocessing.py})},linerange={203-226}]{../src/preprocessing.py}
+\lstinputlisting[caption={\texttt{Preprocessor.fit} dan \texttt{transform} (\texttt{src/preprocessing.py})},linerange={103,109-117,120-148,151-154}]{../src/preprocessing.py}
+\lstinputlisting[caption={Fitur sebelum imputasi dan imputasi kelompok (\texttt{src/preprocessing.py})},linerange={208-231}]{../src/preprocessing.py}
 
 \section{Ringkasan Pengaruh \textit{Preprocessing}}
 
@@ -451,8 +451,12 @@ Seleksi fitur dilakukan dengan bantuan model pemeringkat. Model dilatih sekali
 dengan seluruh fitur, lalu fitur diurutkan berdasarkan
 \texttt{feature\_importances\_} atau $|\texttt{coef\_}|$. Model kemudian dilatih
 ulang dengan $k$ fitur teratas. Secara bawaan, model pemeringkat adalah model itu
-sendiri. KNN memakai DTL (\texttt{max\_depth} $=10$) sebagai pemeringkat karena
-KNN tidak memiliki bobot fitur. Untuk SVM, urutan fitur dapat diambil dari $|w|$
+sendiri. KNN memakai DTL (\texttt{criterion="entropy"}, \texttt{max\_depth} $=10$,
+\texttt{min\_samples\_split} $=50$) sebagai pemeringkat karena KNN tidak memiliki
+bobot fitur. Pada \texttt{X\_train}, lima fitur terpenting menurut pemeringkat ini
+adalah \texttt{days\_before\_arrival} (0,277), \texttt{lead\_x\_price} (0,140),
+\texttt{special\_requests} (0,119), \texttt{booking\_channel} Online Travel Agent
+(0,117), dan \texttt{date\_rate} (0,095). Untuk SVM, urutan fitur dapat diambil dari $|w|$
 SVM linear ($w=\sum\alpha_i y_i x_i$) karena SVM RBF tidak memiliki bobot
 eksplisit. Model terbaik tidak memakai seleksi fitur maupun PCA karena seluruh 61
 kolom dipakai langsung oleh SVM RBF.
@@ -461,7 +465,7 @@ PCA dihitung dari \textit{eigenvector} matriks kovarians. Jika $n<1$, jumlah
 komponen dipilih sampai proporsi variansi kumulatif mencapai $n$. Jika $n\ge1$,
 PCA memakai tepat $n$ komponen.
 
-\lstinputlisting[caption={PCA dan \texttt{Pipeline} (\texttt{src/preprocessing.py})},linerange={252-266,269,271-285,287-302}]{../src/preprocessing.py}
+\lstinputlisting[caption={PCA dan \texttt{Pipeline} (\texttt{src/preprocessing.py})},linerange={257-271,274,276-307}]{../src/preprocessing.py}
 
 \section{Penanganan Ketidakseimbangan Kelas}
 

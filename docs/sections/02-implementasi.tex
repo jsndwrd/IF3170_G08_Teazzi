@@ -10,7 +10,7 @@ Potongan kode pada bab ini diambil langsung dari \textit{repository}.
 	\centering
 	\caption{Modul program}
 	\label{tab:modul}
-	\begin{tabular}{l p{7.6cm}}
+	\begin{tabular}{l p{7cm}}
 		\toprule
 		\textbf{Modul} & \textbf{Isi} \\
 		\midrule
@@ -21,8 +21,9 @@ Potongan kode pada bab ini diambil langsung dari \textit{repository}.
 		\texttt{models/base.py} & Antarmuka \texttt{BaseModel}: \texttt{fit}, \texttt{predict}, \texttt{set\_params}, \texttt{save}, \texttt{load} \\
 		\texttt{models/knn.py} & K-Nearest Neighbors \\
 		\texttt{models/logistic\_regression.py} & Logistic Regression \\
+		\texttt{logistic\_submission.py} & \textit{Solver} Logistic Regression (\textit{batch gradient descent}, \textit{mini-batch} SGD, L-BFGS) \\
 		\texttt{models/svm.py} & Support Vector Machine (SMO) \\
-		\texttt{models/dtl.py} & Decision Tree Learning \\
+		\texttt{models/dtl.py} & Decision Tree Learning (CART) \\
 		\texttt{models/bayes\_network.py} & Bayesian Network \\
 		\texttt{main.ipynb} & \textit{Notebook} utama yang menjalankan seluruh tahapan CRISP-DM \\
 		\bottomrule
@@ -44,20 +45,222 @@ kembali dengan \texttt{pickle}.
 \section{K-Nearest Neighbors}
 \label{sec:knn}
 
-\todo{Implementasi \texttt{KNN.fit} dan \texttt{KNN.predict} di
-\texttt{src/models/knn.py} belum selesai. Parameter yang sudah disiapkan:
-\texttt{k}, \texttt{metric} (\texttt{euclidean}, \texttt{manhattan},
-\texttt{minkowski}), dan \texttt{p}. Jelaskan cara kerja, fungsi/kelas, dan
-sertakan potongan kode setelah implementasi selesai.}
+\subsection{Formulasi}
+
+Kelas \texttt{KNN} di \texttt{src/models/knn.py} mengimplementasikan
+\textit{k-nearest neighbors}~\cite{kkif2026knn,cunningham2020knn}. KNN adalah
+\textit{lazy learner}: \texttt{fit} tidak membangun model, tetapi hanya
+menyimpan data latih (\texttt{X\_}) dan labelnya. Label diubah menjadi indeks
+kelas (\texttt{classes\_} dan \texttt{y\_encoded\_}). Seluruh komputasi terjadi
+saat prediksi. Untuk setiap baris uji $z$, jaraknya ke setiap baris latih $x_i$
+dihitung dengan salah satu metrik berikut (parameter \texttt{metric}):
+\begin{equation}
+	\begin{gathered}
+	d_{\text{euclidean}}=\sqrt{\sum_{j}\bigl(w_j(x_{ij}-z_j)\bigr)^2},\\
+	d_{\text{manhattan}}=\sum_{j}w_j\lvert x_{ij}-z_j\rvert,\\
+	d_{\text{minkowski}}=\Bigl(\sum_{j}\bigl(w_j\lvert x_{ij}-z_j\rvert\bigr)^p\Bigr)^{1/p}.
+	\end{gathered}
+\end{equation}
+Bobot fitur $w_j$ bernilai 1 secara bawaan. Parameter \texttt{feature\_weights}
+dapat mengubahnya per nama fitur. Satu nama juga berlaku untuk semua kolom
+\textit{one-hot} yang diawali nama tersebut, misalnya \texttt{booking\_channel}
+untuk semua kolom \texttt{booking\_channel\_*}.
+
+Setelah $k$ tetangga terdekat $N_k(z)$ ditemukan, peluang setiap kelas dihitung
+dari suara tetangga,
+\begin{equation}
+	\begin{gathered}
+	P(c\mid z)=\frac{\sum_{i\in N_k(z)}v_i\,[y_i=c]}{\sum_{i\in N_k(z)}v_i},\\
+	v_i=\begin{cases}1 & \texttt{vote\_weights="uniform"}\\ 1/d(x_i,z)^2 & \texttt{vote\_weights="inverse\_square"}\end{cases}
+	\end{gathered}
+\end{equation}
+Pada \texttt{inverse\_square}, jika ada tetangga yang jaraknya tepat 0, hanya
+tetangga tersebut yang memberi suara agar tidak terjadi pembagian dengan nol.
+\texttt{predict} memilih kelas dengan peluang terbesar. Jika \texttt{threshold}
+diisi, kelas 1 dipilih jika $P(1\mid z)\ge\texttt{threshold}$.
+
+\subsection{Perhitungan Jarak}
+
+Jarak dihitung untuk satu \textit{batch} baris uji terhadap seluruh data latih
+sekaligus dengan operasi matriks NumPy.
+\begin{itemize}
+	\item Untuk jarak Euclidean, $\lVert x-z\rVert^2$ diuraikan menjadi
+	$\lVert x\rVert^2+\lVert z\rVert^2-2\,x^\top z$. Norma kuadrat data latih
+	dihitung sekali, lalu suku $x^\top z$ untuk satu \textit{batch} cukup dihitung
+	dengan satu perkalian matriks. Nilai negatif kecil akibat galat
+	\textit{floating point} dipotong menjadi 0 sebelum diakarkan.
+	\item Untuk jarak Manhattan dan Minkowski, selisih setiap pasangan baris
+	dihitung dengan \textit{broadcasting} menjadi tensor
+	(\textit{batch}, $n$, $d$), lalu dijumlahkan sepanjang sumbu fitur.
+	\item Ukuran \textit{batch} dibatasi paling banyak 128 baris, dan dikecilkan
+	lagi agar tensor selisih (\textit{batch}, $n$, $d$) tidak melebihi 16 juta
+	elemen (sekitar 128 MB dalam \textit{float64}).
+\end{itemize}
+
+\subsection{Pemilihan Tetangga}
+
+Fungsi \texttt{\_nearest\_indices} memilih $k$ tetangga tanpa mengurutkan
+seluruh jarak.
+\begin{enumerate}
+	\item \texttt{np.argpartition} menemukan $k$ jarak terkecil dalam $O(n)$.
+	\item Jarak terbesar di antara $k$ kandidat tersebut menjadi batas. Semua
+	baris yang jaraknya lebih kecil daripada batas pasti terpilih.
+	\item Sisa tempat diisi baris yang jaraknya sama dengan batas, mulai dari
+	indeks terkecil. Dengan cara ini, tetangga yang terpilih saat jaraknya seri
+	tidak bergantung pada urutan internal \texttt{argpartition}, sehingga
+	prediksi selalu sama.
+	\item Tetangga diurutkan menurut (jarak, indeks).
+\end{enumerate}
+KNN tidak mempelajari bobot fitur sehingga tidak dapat meranking fiturnya
+sendiri. Untuk seleksi fitur, \texttt{KNN} dibungkus dengan
+\texttt{Pipeline(select=k, ranker=DTL(...))}, yang memakai
+\texttt{feature\_importances\_} DTL sebagai pemeringkat
+(Subbab~\ref{sec:seleksi}). Semua parameter diperiksa di \texttt{set\_params}
+sehingga nilai yang tidak valid, misalnya $k<1$ atau $p<1$, langsung ditolak.
+
+\lstinputlisting[caption={Penyimpanan data latih (\texttt{src/models/knn.py})},linerange={93,96-97,109-114,134}]{../src/models/knn.py}
+
+\lstinputlisting[caption={Perhitungan jarak dan voting (\texttt{src/models/knn.py})},linerange={136,150,156-214}]{../src/models/knn.py}
+
+\lstinputlisting[caption={Pemilihan $k$ tetangga (\texttt{src/models/knn.py})},linerange={230-237}]{../src/models/knn.py}
 
 \section{Logistic Regression}
 \label{sec:lr}
 
-\todo{Implementasi \texttt{LogisticRegression.fit} dan \texttt{predict} di
-\texttt{src/models/logistic\_regression.py} belum selesai. Parameter yang sudah
-disiapkan: \texttt{lr}, \texttt{n\_iter}, \texttt{reg} (L1/L2), dan \texttt{lam}.
-Jelaskan fungsi sigmoid, \textit{log-loss}, \textit{gradient descent}, dan
-regularisasi beserta potongan kode.}
+\subsection{Formulasi}
+
+Kelas \texttt{LogisticRegression} di \texttt{src/models/logistic\_regression.py}
+memodelkan peluang pembatalan sebagai fungsi sigmoid dari kombinasi linear
+fitur~\cite{khodra2021lrwhat},
+\begin{equation}
+	P(y=1\mid x)=\sigma(z)=\frac{1}{1+e^{-z}},\qquad z=w^\top x+b .
+\end{equation}
+Fungsi \texttt{\_sigmoid} menghitung $1/(1+e^{-z})$ untuk $z\ge0$ dan
+$e^{z}/(1+e^{z})$ untuk $z<0$ agar $e^{-z}$ tidak \textit{overflow} pada $z$
+negatif yang besar. Parameter $(w,b)$ dicari dengan meminimalkan
+\textit{log-loss} rata-rata ditambah regularisasi,
+\begin{equation}
+	J(w,b)=\frac{1}{n}\sum_{i=1}^{n}\Bigl[\log\bigl(1+e^{z_i}\bigr)-y_i z_i\Bigr]+\lambda R(w).
+\end{equation}
+Suku dalam kurung sama dengan $-[y_i\log p_i+(1-y_i)\log(1-p_i)]$, tetapi
+dihitung dengan \texttt{np.logaddexp} agar stabil secara numerik. Regularisasi
+dipilih dengan parameter \texttt{reg}, dengan kekuatan $\lambda$ (\texttt{lam}).
+Bias $b$ tidak diregularisasi.
+\begin{table}[H]
+	\centering
+	\caption{Regularisasi Logistic Regression}
+	\label{tab:reg-lr}
+	\begin{tabular}{l l l}
+		\toprule
+		\texttt{reg} & $R(w)$ & $\nabla R(w)$ \\
+		\midrule
+		\texttt{None} & $0$ & $0$ \\
+		\texttt{"l1"} & $\sum_j\lvert w_j\rvert$ & $\operatorname{sign}(w)$ \\
+		\texttt{"l2"} & $\tfrac12\sum_j w_j^2$ & $w$ \\
+		\texttt{"elasticnet"} & $r\sum_j\lvert w_j\rvert+\tfrac{1-r}{2}\sum_j w_j^2$ & $r\operatorname{sign}(w)+(1-r)\,w$ \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+L1 mendorong bobot fitur yang kurang berguna tepat ke 0 sehingga sekaligus
+menyeleksi fitur. L2 mengecilkan semua bobot secara merata tanpa membuatnya nol.
+\textit{Elastic Net} menggabungkan keduanya dengan proporsi $r$
+(\texttt{l1\_ratio}). Karena $\lvert w_j\rvert$ tidak terdiferensiasi di 0,
+L1 memakai \textit{subgradient} $\operatorname{sign}(w_j)$, dengan
+$\operatorname{sign}(0)=0$.
+
+\subsection{\textit{Stochastic Gradient Ascent}}
+
+Pelatihan mengikuti \textit{stochastic gradient ascent} pada materi
+kuliah~\cite{khodra2021lrsga}: memaksimalkan \textit{log-likelihood} sama dengan
+meminimalkan \textit{log-loss}. Bobot dimulai dari nol, lalu setiap langkah
+memakai satu sampel.
+\begin{enumerate}
+	\item Pilih satu indeks $i$ secara acak dengan generator ber-\textit{seed}
+	(\texttt{random\_state}) agar hasil pelatihan dapat direproduksi.
+	\item Hitung $p_i=\sigma(w^\top x_i+b)$ dan residu $y_i-p_i$.
+	\item Perbarui parameter dengan laju belajar $\eta$ (\texttt{lr}):
+	\begin{equation}
+		w\leftarrow w+\eta\bigl[(y_i-p_i)\,x_i-\lambda\nabla R(w)\bigr],\qquad
+		b\leftarrow b+\eta\,(y_i-p_i).
+	\end{equation}
+\end{enumerate}
+Parameter \texttt{n\_iter} adalah jumlah pembaruan satu sampel, bukan jumlah
+\textit{epoch}. Selama pelatihan, nilai $J(w,b)$ pada seluruh data latih dicatat
+setiap \texttt{eval\_interval} langkah (\texttt{loss\_history\_}), dan
+$(b,w)$ dicatat setiap \texttt{history\_interval} langkah
+(\texttt{coef\_history\_}) sehingga lintasan parameter selama pelatihan dapat
+digambar. \texttt{predict\_proba} mengembalikan $[1-p,\ p]$, dan \texttt{predict}
+mengembalikan 1 jika $p\ge\texttt{threshold}$ (bawaan 0,5).
+
+\lstinputlisting[caption={Pelatihan dengan \textit{stochastic gradient ascent} (\texttt{src/models/logistic\_regression.py})},linerange={29-31,45-48,58-71,96}]{../src/models/logistic_regression.py}
+
+\lstinputlisting[caption={Prediksi dan sigmoid (\texttt{src/models/logistic\_regression.py})},linerange={98-111,120-127}]{../src/models/logistic_regression.py}
+
+\lstinputlisting[caption={Regularisasi dan fungsi objektif (\texttt{src/models/logistic\_regression.py})},linerange={129-158}]{../src/models/logistic_regression.py}
+
+\subsection{Optimasi \textit{Solver}: L-BFGS (Bonus)}
+\label{sec:lbfgs}
+
+\textit{Stochastic gradient ascent} memakai satu sampel per langkah sehingga arah
+pembaruannya berisik dan laju belajarnya harus dipilih manual. Modul
+\texttt{src/logistic\_submission.py} menyediakan tiga \textit{solver}
+\textit{from scratch} (hanya NumPy) untuk fungsi objektif yang sama dengan
+regularisasi L2,
+\begin{equation}
+	J(\theta)=\frac{1}{n}\sum_{i}s_i\log\bigl(1+e^{-(2y_i-1)z_i}\bigr)+\frac{\mu}{2}\lVert w\rVert^2,
+	\qquad \nabla J(\theta)=\Bigl[\tfrac1n\textstyle\sum_i r_i,\ \tfrac1n X^\top r+\mu w\Bigr],
+\end{equation}
+dengan $\theta=(b,w)$, $r_i=s_i(\sigma(z_i)-y_i)$, bobot sampel $s_i$, dan
+$\mu=1/(Cn)$. Ketiga \textit{solver} tersebut adalah sebagai berikut.
+\begin{enumerate}
+	\item \textbf{\textit{Batch gradient descent}}
+	(\texttt{gradient\_descent\_minimize}) memakai gradien seluruh data. Panjang
+	langkahnya dipilih dengan \textit{backtracking} Armijo~\cite{armijo1966}:
+	langkah $t$ dibagi dua sampai $J(\theta+td)\le J(\theta)+c_1t\,\nabla J^\top d$,
+	lalu langkah berikutnya dimulai dari $1{,}25t$.
+	\item \textbf{\textit{Mini-batch} SGD} (\texttt{minibatch\_sgd\_minimize})
+	memakai 512 sampel per pembaruan dengan laju belajar
+	$\eta_t=\eta_0/\sqrt{1+10^{-3}t}$ yang mengecil. Pelatihan berhenti jika $J$
+	tidak turun selama 10 \textit{epoch}, dan parameter dengan $J$ terkecil yang
+	dikembalikan.
+	\item \textbf{L-BFGS} (\texttt{lbfgs\_minimize}) adalah metode
+	\textit{quasi-Newton}~\cite{liu1989lbfgs}.
+\end{enumerate}
+
+\textbf{Cara L-BFGS mengoptimasi model.} Metode Newton memakai arah
+$-H^{-1}\nabla J$, dengan $H$ matriks Hessian, sehingga langkahnya menyesuaikan
+kelengkungan fungsi objektif di setiap arah. Gradient descent hanya memakai
+$-\nabla J$, sehingga langkahnya lambat pada arah yang landai dan berosilasi pada
+arah yang curam. Menyimpan $H$ berukuran $d\times d$ mahal. L-BFGS hanya
+menyimpan $m=10$ pasangan terakhir $s_k=\theta_{k+1}-\theta_k$ dan
+$y_k=\nabla J_{k+1}-\nabla J_k$, lalu menghitung $H^{-1}\nabla J$ secara implisit
+dengan \textit{two-loop recursion}:
+\begin{enumerate}
+	\item $q\leftarrow\nabla J$. Dari pasangan terbaru ke terlama, hitung
+	$\alpha_k=\rho_k s_k^\top q$ dan $q\leftarrow q-\alpha_k y_k$, dengan
+	$\rho_k=1/(y_k^\top s_k)$.
+	\item Skalakan $q$ dengan $\gamma=s^\top y/y^\top y$ dari pasangan terbaru.
+	\item Dari pasangan terlama ke terbaru, hitung $\beta=\rho_k y_k^\top q$ dan
+	$q\leftarrow q+s_k(\alpha_k-\beta)$. Arah pencarian adalah $d=-q$.
+\end{enumerate}
+Panjang langkah dipilih dengan \textit{line search} yang memenuhi kondisi
+\textit{strong Wolfe}~\cite{wolfram2026stepcontrol}, yaitu penurunan cukup
+$J(\theta+td)\le J(\theta)+c_1t\,\nabla J^\top d$ dan kelengkungan
+$\lvert\nabla J(\theta+td)^\top d\rvert\le c_2\lvert\nabla J^\top d\rvert$ dengan
+$c_1=10^{-4}$ dan $c_2=0{,}9$. Kondisi kelengkungan menjamin $s_k^\top y_k>0$
+sehingga aproksimasi $H^{-1}$ tetap definit positif dan $d$ selalu arah turun.
+Pasangan dengan $s_k^\top y_k$ yang terlalu kecil tidak disimpan. Jika
+\textit{line search} gagal, \textit{backtracking} Armijo dipakai sebagai
+cadangan. Karena fungsi objektif ini konveks dan mulus, arah
+\textit{quasi-Newton} umumnya mencapai minimum dalam jauh lebih sedikit iterasi
+daripada \textit{gradient descent}. Model \texttt{lr} pada perbandingan utama tetap
+memakai kelas \texttt{LogisticRegression}; ketiga \textit{solver} dibandingkan pada
+bagian \textit{Bonus Optimisasi Logistic Regression} di \textit{notebook}. Pelatihan berhenti jika $\lVert\nabla J\rVert_\infty\le10^{-5}$
+atau perubahan $J$ relatif di bawah $10^{-9}$.
+
+\lstinputlisting[caption={Fungsi objektif berbobot dan gradiennya (\texttt{src/logistic\_submission.py})},linerange={590-603}]{../src/logistic_submission.py}
+
+\lstinputlisting[caption={L-BFGS: \textit{two-loop recursion} dan pembaruan memori (\texttt{src/logistic\_submission.py})},linerange={479-482,494-575}]{../src/logistic_submission.py}
 
 \section{Support Vector Machine}
 \label{sec:svm}
@@ -97,15 +300,18 @@ dan \texttt{gaussian} merujuk ke kernel yang sama.
 	\end{tabular}
 \end{table}
 
-\lstinputlisting[caption={Parameter dan fungsi kernel (\texttt{src/models/svm.py})},linerange={5-5,7-10,12-23,25-28}]{../src/models/svm.py}
+\lstinputlisting[caption={Parameter dan fungsi kernel (\texttt{src/models/svm.py})},linerange={9-9,11-14,16-27,29-32}]{../src/models/svm.py}
 
-\subsection{Sequential Minimal Optimization}
+\subsection{Optimasi dengan \textit{Sequential Minimal Optimization} (Bonus)}
 
-Masalah dual diselesaikan dengan \textit{Sequential Minimal Optimization}
-(SMO). Setiap iterasi SMO hanya mengubah dua variabel, yaitu
+Masalah dual adalah \textit{quadratic programming} dengan $n$ variabel. Pustaka
+\textit{quadratic programming} umum membutuhkan matriks kernel $n\times n$ di
+memori dan biaya komputasi yang tumbuh sangat cepat terhadap $n$. Implementasi
+ini menyelesaikannya dengan \textit{Sequential Minimal Optimization}
+(SMO)~\cite{platt1998smo}. Setiap iterasi SMO hanya mengubah dua variabel, yaitu
 $\alpha_i$ dan $\alpha_j$. Subproblem dua variabel ini dapat diselesaikan secara
 analitik tanpa melanggar $\sum_i\alpha_i y_i=0$. Pasangan $(i,j)$ dipilih dengan
-\textit{second-order working set selection} melalui langkah
+\textit{second-order working set selection}~\cite{fan2005wss} melalui langkah
 berikut.
 \begin{enumerate}
 	\item Untuk setiap sampel, simpan $u_k=\sum_l\alpha_l y_l K(x_l,x_k)$ dan
@@ -133,47 +339,51 @@ Fungsi \texttt{snap} membulatkan nilai $\alpha$ yang sangat dekat dengan 0 atau
 $C$ agar status \textit{bound} tidak berganti-ganti akibat galat
 \textit{floating point}.
 
+Pemilihan pasangan orde dua mengoptimasi pelatihan karena pasangan dipilih
+berdasarkan kenaikan objektif dual yang dihasilkannya, bukan hanya berdasarkan
+pelanggaran KKT terbesar. Pemilihan orde pertama hanya memakai gradien $g$,
+sedangkan pemilihan orde dua juga memakai kelengkungan
+$K_{ii}+K_{jj}-2K_{ij}$, sehingga setiap iterasi menaikkan objektif lebih
+banyak dan jumlah iterasi sampai konvergen lebih sedikit~\cite{fan2005wss}.
+
 Setelah konvergen, bias $b$ dihitung sebagai rata-rata $g_k$ pada \textit{free
 support vector} ($0<\alpha_k<C$) karena sampel tersebut terletak tepat di margin.
 Untuk kernel linear, bobot $w=\sum_i\alpha_i y_i x_i$ disimpan di
 \texttt{coef\_}. Prediksi kernel linear cukup dihitung sebagai $Xw+b$, dan nilai
 $|w|$ dipakai untuk seleksi fitur (Subbab~\ref{sec:seleksi}).
 
-\lstinputlisting[caption={Pelatihan SVM dengan SMO (\texttt{src/models/svm.py})},linerange={30-72}]{../src/models/svm.py}
+\lstinputlisting[caption={Pelatihan SVM dengan SMO (\texttt{src/models/svm.py})},linerange={34-76}]{../src/models/svm.py}
 
-\lstinputlisting[caption={Fungsi keputusan dan prediksi SVM (\texttt{src/models/svm.py})},linerange={75-83}]{../src/models/svm.py}
+\lstinputlisting[caption={Fungsi keputusan dan prediksi SVM (\texttt{src/models/svm.py})},linerange={79-87}]{../src/models/svm.py}
 
 \section{Decision Tree Learning}
 \label{sec:dtl}
 
 \subsection{Formulasi}
 
-Kelas \texttt{DTL} di \texttt{src/models/dtl.py} membangun pohon keputusan biner.
-Setiap simpul dalam menguji satu fitur terhadap satu ambang, $x_f\le t$. Sampel
-yang memenuhi syarat masuk ke cabang kiri, dan sisanya masuk ke cabang kanan.
-Ukuran pemilihan atribut mengikuti ID3/C4.5, yaitu \textit{information gain}
-berbasis entropi, sedangkan bentuk pohonnya biner seperti CART. Untuk himpunan
-sampel $S$ dengan proporsi kelas $p_c$, \textit{impurity} dihitung dengan salah
-satu kriteria berikut (parameter \texttt{criterion}):
+Kelas \texttt{DTL} di \texttt{src/models/dtl.py} mengimplementasikan
+\textit{Classification and Regression Tree} (CART)~\cite{breiman1984cart}, salah
+satu dari tiga algoritma DTL yang dapat dipilih pada spesifikasi. Pohon CART
+selalu biner. Setiap simpul dalam menguji satu fitur, yaitu $x_f\le t$ untuk
+fitur numerik atau $x_f\in S$ untuk fitur kategorikal. Sampel yang memenuhi
+syarat masuk ke cabang kiri, dan sisanya masuk ke cabang kanan. Untuk himpunan
+sampel $S$ dengan proporsi kelas $p_c$, \textit{impurity} dihitung dengan
+\textit{gini} (bawaan CART) atau entropi (parameter \texttt{criterion}):
 \begin{equation}
-	H(S)=-\sum_{c}p_c\log_2 p_c \quad(\texttt{entropy}),\qquad
-	G(S)=1-\sum_{c}p_c^2 \quad(\texttt{gini}).
+	G(S)=1-\sum_{c}p_c^2 \quad(\texttt{gini}),\qquad
+	H(S)=-\sum_{c}p_c\log_2 p_c \quad(\texttt{entropy}).
 \end{equation}
-Pemisahan $S$ menjadi $S_L$ dan $S_R$ dinilai dengan \textit{information gain}
+Pemisahan $S$ menjadi $S_L$ dan $S_R$ dinilai dengan penurunan \textit{impurity}
 \begin{equation}
 	\text{Gain}(S,f,t)=I(S)-\frac{|S_L|}{|S|}I(S_L)-\frac{|S_R|}{|S|}I(S_R),
 \end{equation}
-dengan $I$ adalah $H$ atau $G$. Pada setiap simpul, pasangan $(f,t)$ dengan
+dengan $I$ adalah $G$ atau $H$. Pada setiap simpul, pemisahan dengan
 \textit{gain} terbesar dipilih, lalu pohon tumbuh secara rekursif pada kedua
-cabang.
+cabang. Model akhir memakai \texttt{criterion="gini"} sesuai CART.
 
-\subsection{Atribut Kontinu}
+\subsection{Atribut Numerik}
 
-Setelah \textit{preprocessing}, semua fitur sudah berupa bilangan. Atribut
-kategorikal sudah diubah dengan \textit{ordinal} atau \textit{one-hot encoding}
-(Bab~3), sehingga ambang pada kolom \textit{one-hot} berarti ``kategori ini
-dibandingkan dengan kategori lain''. Kandidat ambang untuk setiap fitur dicari
-sebagai berikut.
+Kandidat ambang untuk fitur numerik dicari sebagai berikut.
 \begin{enumerate}
 	\item Urutkan nilai fitur pada simpul tersebut.
 	\item Kandidat ambang adalah titik tengah antara dua nilai berurutan yang
@@ -191,6 +401,42 @@ berdekatan terbulatkan ke nilai yang lebih besar, nilai yang lebih kecil dipakai
 sebagai ambang agar kedua sisi tetap terpisah. Jika beberapa pemisahan memiliki
 \textit{gain} yang sama, fitur dengan indeks terkecil yang dipilih.
 
+\subsection{Atribut Kategorikal}
+
+Kolom yang memuat teks dianggap kategorikal. Saat \texttt{fit}, kategori setiap
+kolom disimpan di \texttt{categories\_} dan diubah menjadi kode bilangan bulat.
+Kategori yang tidak muncul pada data latih diperlakukan sebagai nilai kosong saat
+prediksi. CART memisahkan atribut kategorikal dengan himpunan bagian $S$ dari
+kategorinya. Atribut dengan $k$ kategori memiliki $2^{k-1}-1$ kemungkinan
+pemisahan, tetapi untuk dua kelas Breiman dkk.~\cite{breiman1984cart} membuktikan bahwa
+pemisahan terbaik selalu berupa awalan dari kategori yang diurutkan menurut
+proporsi kelas 1. Karena itu, kategori diurutkan menurut proporsi pembatalannya,
+lalu $k-1$ kandidat pemisahan dihitung dengan \textit{cumulative sum} yang sama
+seperti fitur numerik. Simpul menyimpan kategori yang masuk ke cabang kiri
+(\texttt{test}) dan semua kategori yang muncul di simpul tersebut
+(\texttt{seen}).
+
+\subsection{Nilai Hilang}
+
+Nilai hilang ditangani di dalam pohon dengan tiga aturan.
+\begin{enumerate}
+	\item Ambang atau himpunan kategori untuk fitur $f$ dicari hanya dari baris
+	$K$ yang nilai $x_f$-nya diketahui. \textit{Gain}-nya kemudian dikalikan
+	$|K|/|S|$, seperti pada C4.5~\cite{quinlan1993c45}, agar fitur yang banyak
+	kosong tidak lebih mudah terpilih.
+	\item Baris latih yang $x_f$-nya kosong dikirim ke cabang yang menerima lebih
+	banyak baris latih. Arah ini disimpan di \texttt{missing\_left}. Untuk
+	pemisahan biner, aturan ini sama dengan mengisi nilai kosong dengan nilai
+	yang paling umum pada simpul tersebut, salah satu cara yang dibahas pada
+	materi kuliah~\cite{kkif2021dtlmissing}.
+	\item Saat prediksi, nilai kosong dan kategori yang tidak pernah muncul di
+	simpul tersebut mengikuti arah \texttt{missing\_left}.
+\end{enumerate}
+CART asli memakai \textit{surrogate split}, yaitu pemisahan cadangan dengan fitur
+lain~\cite{breiman1984cart}. Implementasi ini memakai aturan yang lebih
+sederhana di atas. Dengan cara ini, \texttt{DTL} dapat dilatih langsung pada data
+mentah yang masih berisi teks dan nilai kosong (Subbab~\ref{sec:hasil-dtl}).
+
 \subsection{Kriteria Berhenti dan Prediksi}
 
 Sebuah simpul menjadi daun jika salah satu kondisi berikut terpenuhi.
@@ -201,54 +447,80 @@ Sebuah simpul menjadi daun jika salah satu kondisi berikut terpenuhi.
 	\item Tidak ada pemisahan dengan \textit{gain} positif, misalnya karena semua
 	fitur pada simpul bernilai sama.
 \end{enumerate}
-Simpul dalam disimpan sebagai \textit{tuple} (fitur, ambang, kiri, kanan),
-sedangkan daun menyimpan proporsi kelas dari sampel latih yang sampai ke daun
-tersebut. \texttt{predict\_proba} menelusuri pohon dari akar sampai daun dan
-mengembalikan proporsi tersebut. \texttt{predict} mengembalikan kelas mayoritas
-pada daun. Parameter \texttt{max\_depth} dan \texttt{min\_samples\_split} membatasi
-ukuran pohon agar tidak \textit{overfitting}. Konfigurasi di \textit{notebook}
-memakai \texttt{criterion="entropy"} dan \texttt{max\_depth} $=10$. Pohon ini
-memiliki kedalaman 10 dan 344 daun jika dilatih pada \texttt{X\_train}.
+Setiap simpul disimpan sebagai objek \texttt{Node} yang memuat jumlah sampel
+latih per kelas (\texttt{counts}). Simpul dalam juga memuat fitur, ambang atau
+himpunan kategori, \texttt{missing\_left}, dan kedua anaknya. Metode
+\texttt{goes\_left} menentukan arah semua baris pada satu simpul sekaligus.
+\texttt{predict\_proba} mengalirkan baris-baris data dari akar sampai daun dengan
+metode ini dan mengembalikan proporsi kelas pada daun. \texttt{predict}
+mengembalikan kelas mayoritas pada daun.
 
 Pohon keputusan tidak dipengaruhi skala fitur karena setiap pemisahan hanya
 membandingkan nilai satu fitur dengan ambang. Karena itu, DTL memakai varian
 \textit{preprocessing} \texttt{tree} tanpa \textit{capping} dan standardisasi
-(Tabel~\ref{tab:varian-prep}). Nilai hilang tetap diimputasi lebih dahulu karena
-implementasi ini tidak menangani NaN.
+(Tabel~\ref{tab:varian-prep}). Walaupun \texttt{DTL} dapat menangani nilai kosong
+dan kategori sendiri, varian \texttt{tree} tetap mengimputasi dan meng-\textit{encode}
+data. Perbandingannya dengan data mentah dibahas pada Subbab~\ref{sec:hasil-dtl}.
+
+\lstinputlisting[caption={Struktur simpul dan pelatihan (\texttt{src/models/dtl.py})},linerange={13-16,19-24,28,30-34,36-50}]{../src/models/dtl.py}
+
+\lstinputlisting[caption={\textit{Encoding} kategori dan pertumbuhan pohon (\texttt{src/models/dtl.py})},linerange={63-71,73-82}]{../src/models/dtl.py}
+
+\lstinputlisting[caption={\textit{Impurity} dan pencarian pemisahan terbaik (\texttt{src/models/dtl.py})},linerange={85-91,95-100,102-130}]{../src/models/dtl.py}
+
+\lstinputlisting[caption={Prediksi DTL (\texttt{src/models/dtl.py})},linerange={52-53,56-60,151-157}]{../src/models/dtl.py}
+
+\subsection{Optimasi dengan \textit{Minimal Cost-Complexity Pruning} (Bonus)}
+\label{sec:ccp}
+
+\textbf{Masalah.} Tanpa batas, pohon tumbuh sampai hampir setiap daun murni.
+Daun-daun di bagian bawah pohon hanya berisi sedikit sampel sehingga cenderung
+menghafal data latih (\textit{overfitting}). Membatasi \texttt{max\_depth} mengurangi masalah ini,
+tetapi batasnya sama untuk semua cabang, termasuk cabang yang masih layak
+dipecah.
+
+\textbf{Algoritma.} \textit{Minimal cost-complexity pruning}~\cite{breiman1984cart}
+memangkas pohon penuh $T_0$ menjadi subpohon $T\preceq T_0$ yang meminimalkan
+\begin{equation}
+	R_\alpha(T)=R(T)+\alpha\,|\widetilde{T}|,\qquad R(T)=\sum_{t\in\widetilde{T}}\frac{n_t}{n}\,I(t),
+\end{equation}
+dengan $\widetilde{T}$ himpunan daun $T$, $n_t$ jumlah sampel latih di daun $t$,
+dan $\alpha\ge0$ (parameter \texttt{ccp\_alpha}). Suku $\alpha|\widetilde{T}|$
+memberi harga untuk setiap daun, sehingga sebuah cabang hanya dipertahankan jika
+penurunan \textit{impurity}-nya sebanding dengan jumlah daun yang ditambahkannya.
+Untuk setiap $\alpha$ terdapat satu subpohon terkecil $T(\alpha)$ yang meminimalkan
+$R_\alpha$~\cite{breiman1984cart}. Fungsi \texttt{\_prune} menghitungnya dari bawah
+ke atas.
+\begin{enumerate}
+	\item Biaya simpul $t$ jika dijadikan daun adalah $R(t)+\alpha$, dengan
+	$R(t)=\frac{n_t}{n}I(t)$.
+	\item Biaya subpohon terbaik di bawah $t$ adalah jumlah biaya terbaik kedua
+	anaknya, yang dihitung lebih dahulu secara rekursif.
+	\item Jika biaya daun tidak lebih besar daripada biaya subpohon, $t$ dijadikan
+	daun dengan \texttt{counts} yang sama. Jika sama besar, daun dipilih agar
+	hasilnya subpohon terkecil.
+\end{enumerate}
+Hasilnya sama dengan \textit{weakest-link pruning} pada Breiman dkk.~\cite{breiman1984cart}
+dan parameter \texttt{ccp\_alpha} pada scikit-learn~\cite{sklearn2026tree}, tetapi
+cukup dihitung dengan satu penelusuran pohon. Berbeda dengan
+\textit{reduced-error pruning} yang membutuhkan data validasi
+terpisah~\cite{kkif2021dtloverfit}, \textit{cost-complexity pruning} memakai
+seluruh data latih untuk membangun pohon, dan hanya $\alpha$ yang dipilih dengan
+\textit{cross validation}. \texttt{feature\_importances\_} dihitung dari pohon
+setelah dipangkas. Hasil pemilihan $\alpha$ ada pada Subbab~\ref{sec:hasil-dtl}.
+
+\lstinputlisting[caption={\textit{Minimal cost-complexity pruning} (\texttt{src/models/dtl.py})},linerange={134-148}]{../src/models/dtl.py}
 
 \subsection{\textit{Feature Importance}}
 
 Setiap kali fitur $f$ dipakai untuk memisahkan simpul dengan $n_t$ sampel,
 nilai $n_t\cdot\text{Gain}$ ditambahkan ke skor fitur tersebut. Setelah pohon
-selesai dibangun, skor dinormalkan agar jumlahnya 1 dan disimpan di
+selesai dibangun dan dipangkas, skor dinormalkan agar jumlahnya 1 dan disimpan di
 \texttt{feature\_importances\_}. Ukuran ini sama dengan \textit{mean decrease in
 impurity} pada scikit-learn. \texttt{Pipeline} memakai atribut ini untuk seleksi
 fitur (Subbab~\ref{sec:seleksi}). Misalnya, KNN memakai
-\texttt{DTL(max\_depth=10, min\_samples\_split=50)} sebagai pemeringkat. Pada
-\texttt{X\_train}, lima fitur terpenting adalah \texttt{days\_before\_arrival}
-(0,277), \texttt{lead\_x\_price} (0,140), \texttt{special\_requests} (0,119),
-\texttt{booking\_channel} Online Travel Agent (0,117), dan \texttt{date\_rate}
-(0,095).
-
-\subsection{Verifikasi}
-
-Dengan \texttt{criterion="entropy"} dan \texttt{max\_depth} $=10$, \texttt{DTL}
-dibandingkan dengan \texttt{DecisionTreeClassifier} scikit-learn pada data dan
-parameter yang sama. Prediksi kedua model sama pada 99,6\% baris \texttt{X\_val}.
-\textit{Macro F1} \textit{hold-out} adalah 0,8355 untuk \texttt{DTL} dan 0,8371
-untuk scikit-learn, sedangkan rata-rata 5-\textit{fold} adalah 0,8220 dan 0,8224.
-Perbedaan ini berasal dari cara memilih di antara pemisahan yang \textit{gain}-nya
-sama. Scikit-learn mengacak urutan fitur sehingga hasilnya juga berubah menurut
-\texttt{random\_state}: dengan \textit{seed} 0 sampai 4, \textit{macro F1}
-\textit{hold-out}-nya berkisar 0,8343--0,8357. Skor \texttt{DTL} berada di dalam
-rentang tersebut. Sebagai gantinya, \texttt{DTL} memilih fitur dengan indeks
-terkecil sehingga hasilnya selalu sama.
-
-\lstinputlisting[caption={Pelatihan pohon (\texttt{src/models/dtl.py})},linerange={7,9-10,13-21,32-43}]{../src/models/dtl.py}
-
-\lstinputlisting[caption={\textit{Impurity} dan pencarian pemisahan terbaik (\texttt{src/models/dtl.py})},linerange={46-52,55-72}]{../src/models/dtl.py}
-
-\lstinputlisting[caption={Prediksi DTL (\texttt{src/models/dtl.py})},linerange={24-25,28-29,74-79}]{../src/models/dtl.py}
+\texttt{DTL(criterion="entropy", max\_depth=10, min\_samples\_split=50)} sebagai
+pemeringkat.
 
 \section{Bayesian Network}
 \label{sec:bn}
@@ -446,4 +718,4 @@ Setiap model di-\texttt{deepcopy} sebelum dilatih sehingga objek model di
 \textit{notebook} tidak berubah setelah validasi. Model yang belum
 diimplementasikan (\texttt{NotImplementedError}) dilewati secara otomatis.
 
-\lstinputlisting[caption={\textit{Hold-out} dan \textit{k-fold} (\texttt{src/validation.py})},linerange={13-58}]{../src/validation.py}
+\lstinputlisting[caption={\textit{Hold-out} dan \textit{k-fold} (\texttt{src/validation.py})},linerange={103-127}]{../src/validation.py}
