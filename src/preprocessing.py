@@ -108,13 +108,14 @@ class Preprocessor:
     # te_counts also adds te_<parts>_n, the log count of training rows behind that rate (the row itself excluded)
     def __init__(self, zero_as_missing=(), num_strategy="median", drop=(), cap=(), cap_factor=1.5, ordinal=None, scaler="standard", smoothing=20,
                  flag_missing=(), binned=(), n_bins=10, near_dup=False, near_smoothing=1.0, near_tols=((0, 10, 0.06),),
-                 target_encode=(), te_smoothing=5.0, te_counts=False):
+                 target_encode=(), te_smoothing=5.0, te_counts=False, scale_binary=False, use_fold_priors=True):
         self.zero_as_missing, self.num_strategy, self.drop = list(zero_as_missing), num_strategy, list(drop)
         self.flag_missing, self.binned, self.n_bins = list(flag_missing), list(binned), n_bins
         self.near_dup, self.near_smoothing, self.near_tols = near_dup, near_smoothing, [tuple(t) for t in near_tols]
         self.target_encode, self.te_smoothing, self.te_counts = [tuple(k) for k in target_encode], te_smoothing, te_counts
         self.cap, self.cap_factor = list(cap), cap_factor
         self.ordinal, self.scaler, self.smoothing = ordinal or {}, scaler, smoothing
+        self.scale_binary, self.use_fold_priors = scale_binary, use_fold_priors
 
     # Learns date stats, fill values, IQR bounds, categories, and scaling stats from X and y
     def fit(self, X, y):
@@ -142,9 +143,10 @@ class Preprocessor:
                 "robust": lambda: (X.median(), X.quantile(0.75) - X.quantile(0.25)),
             }[self.scaler]()
             self.center, self.spread = center, spread.replace(0, 1)
-            binary = X.columns[(X.isin([0, 1]).all()) & (X.nunique() <= 2)]
-            self.center.loc[binary] = 0
-            self.spread.loc[binary] = 1
+            if not getattr(self, "scale_binary", False):
+                binary = X.columns[(X.isin([0, 1]).all()) & (X.nunique() <= 2)]
+                self.center.loc[binary] = 0
+                self.spread.loc[binary] = 1
         return self
 
     # Applies the fitted steps to any split, keeping its index; oof holds the out-of-fold target stats of the training rows
@@ -163,24 +165,26 @@ class Preprocessor:
     def fit_transform(self, X, y):
         return self.fit(X, y).transform(X, self.oof)
 
-    # Target stats of the training rows come from the other folds only, so a row never sees its own label
+    # Target counts exclude the row's fold. Smoothing uses each fold's training mean by default.
     def fit_dates(self, X, y):
         self.price_by = X.groupby(["room_category", "arrival_month"])["nightly_rate_idr"].median()
         self.lead_by = X.groupby(["booking_channel", "arrival_month"])["days_before_arrival"].median()
         date, self.prior = arrival_date(X), y.mean()
         self.date_stats, self.date_count = self.rate_table(date, y), date.value_counts()
         folds, fold = stratified_folds(y), np.empty(len(y), dtype=int)
+        use_fold_priors = getattr(self, "use_fold_priors", True)
+        priors = [y.iloc[tr].mean() if use_fold_priors else self.prior for tr, _ in folds]
         self.oof = {"date_rate": np.zeros(len(X))}
-        for k, (tr, va) in enumerate(folds):
+        for k, ((tr, va), prior) in enumerate(zip(folds, priors)):
             fold[va] = k
-            self.oof["date_rate"][va] = self.date_rate(self.rate_table(date.iloc[tr], y.iloc[tr]), date.iloc[va], prior=y.iloc[tr].mean())
+            self.oof["date_rate"][va] = self.date_rate(self.rate_table(date.iloc[tr], y.iloc[tr]), date.iloc[va], prior=prior)
         self.te_tables = {}
         for parts in self.target_encode:
             name, key = "te_" + "_".join(parts), te_key(X, parts)
             self.te_tables[name], self.oof[name] = self.rate_table(key, y), np.zeros(len(X))
             self.oof[name + "_n"] = np.log1p(self.te_tables[name]["count"].reindex(key.values).values - 1)
-            for tr, va in folds:
-                self.oof[name][va] = self.date_rate(self.rate_table(key.iloc[tr], y.iloc[tr]), key.iloc[va], self.te_smoothing, prior=y.iloc[tr].mean())
+            for (tr, va), prior in zip(folds, priors):
+                self.oof[name][va] = self.date_rate(self.rate_table(key.iloc[tr], y.iloc[tr]), key.iloc[va], self.te_smoothing, prior=prior)
         if self.near_dup:
             self.near_X, self.near_y = X.reset_index(drop=True), np.asarray(y)
             for name, tol in self.near_names():
@@ -197,7 +201,7 @@ class Preprocessor:
     def rate_table(self, date, y):
         return pd.DataFrame({"date": date.values, "y": np.asarray(y)}).groupby("date")["y"].agg(["sum", "count"])
 
-    # prior defaults to the training mean; inside a fold it is that fold's own mean so the held-out labels never leak into it
+    # prior defaults to the mean of the data passed to fit.
     def date_rate(self, table, date, smoothing=None, prior=None):
         s, a = table.reindex(date.values), self.smoothing if smoothing is None else smoothing
         prior = self.prior if prior is None else prior
