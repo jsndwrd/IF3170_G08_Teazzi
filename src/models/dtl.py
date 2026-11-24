@@ -77,3 +77,38 @@ class DTL(BaseModel):
             feature, threshold, left, right = node
             node = left if x[feature] <= threshold else right
         return node
+
+
+# Draws the top `top_n` split levels of a fitted DTL; deeper subtrees are shown as "..."
+def plot_tree(model, feature_names, top_n=3, path=None):
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots()
+    ax.axis("off")
+    n_leaves = [0]
+
+    # Returns the x position of node; leaves take consecutive x slots, inner nodes sit above their children
+    def draw(node, depth):
+        if isinstance(node, tuple) and depth < top_n:
+            feature, threshold, left, right = node
+            xs = [draw(left, depth + 1), draw(right, depth + 1)]
+            x = sum(xs) / 2
+            for child_x, edge in zip(xs, ["ya", "tidak"]):
+                ax.plot([x, child_x], [-depth, -depth - 1], color="gray", zorder=1)
+                ax.text((x + child_x) / 2, -depth - 0.5, edge, ha="center", fontsize=8, color="gray")
+            label = f"{feature_names[feature]}\n<= {threshold:.4g}"
+        else:
+            x = n_leaves[0]
+            n_leaves[0] += 1
+            label = "..." if isinstance(node, tuple) else f"kelas {model.classes_[node.argmax()]}\n{node.max():.0%}"
+        ax.text(x, -depth, label, ha="center", va="center", fontsize=8, bbox=dict(boxstyle="round", fc="white"))
+        return x
+
+    draw(model.tree_, 0)
+    ax.set_xlim(-0.5, n_leaves[0] - 0.5)
+    ax.set_ylim(-top_n - 0.5, 0.5)
+    fig.set_size_inches(max(6, 1.6 * n_leaves[0]), 1.4 * (top_n + 1))
+    ax.set_title(f"Decision Tree ({top_n} level percabangan teratas)")
+    if path:
+        fig.savefig(path, dpi=160, bbox_inches="tight")
+    return fig
