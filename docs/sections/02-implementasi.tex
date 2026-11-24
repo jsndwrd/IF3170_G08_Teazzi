@@ -10,7 +10,7 @@ Potongan kode pada bab ini diambil langsung dari \textit{repository}.
 	\centering
 	\caption{Modul program}
 	\label{tab:modul}
-	\begin{tabular}{l p{7.6cm}}
+	\begin{tabular}{l p{7cm}}
 		\toprule
 		\textbf{Modul} & \textbf{Isi} \\
 		\midrule
@@ -21,6 +21,7 @@ Potongan kode pada bab ini diambil langsung dari \textit{repository}.
 		\texttt{models/base.py} & Antarmuka \texttt{BaseModel}: \texttt{fit}, \texttt{predict}, \texttt{set\_params}, \texttt{save}, \texttt{load} \\
 		\texttt{models/knn.py} & K-Nearest Neighbors \\
 		\texttt{models/logistic\_regression.py} & Logistic Regression \\
+		\texttt{logistic\_submission.py} & \textit{Solver} Logistic Regression (\textit{batch gradient descent}, \textit{mini-batch} SGD, L-BFGS) \\
 		\texttt{models/svm.py} & Support Vector Machine (SMO) \\
 		\texttt{models/dtl.py} & Decision Tree Learning (CART) \\
 		\texttt{models/bayes\_network.py} & Bayesian Network \\
@@ -44,20 +45,222 @@ kembali dengan \texttt{pickle}.
 \section{K-Nearest Neighbors}
 \label{sec:knn}
 
-\todo{Implementasi \texttt{KNN.fit} dan \texttt{KNN.predict} di
-\texttt{src/models/knn.py} belum selesai. Parameter yang sudah disiapkan:
-\texttt{k}, \texttt{metric} (\texttt{euclidean}, \texttt{manhattan},
-\texttt{minkowski}), dan \texttt{p}. Jelaskan cara kerja, fungsi/kelas, dan
-sertakan potongan kode setelah implementasi selesai.}
+\subsection{Formulasi}
+
+Kelas \texttt{KNN} di \texttt{src/models/knn.py} mengimplementasikan
+\textit{k-nearest neighbors}~\cite{kkif2026knn,cunningham2020knn}. KNN adalah
+\textit{lazy learner}: \texttt{fit} tidak membangun model, tetapi hanya
+menyimpan data latih (\texttt{X\_}) dan labelnya. Label diubah menjadi indeks
+kelas (\texttt{classes\_} dan \texttt{y\_encoded\_}). Seluruh komputasi terjadi
+saat prediksi. Untuk setiap baris uji $z$, jaraknya ke setiap baris latih $x_i$
+dihitung dengan salah satu metrik berikut (parameter \texttt{metric}):
+\begin{equation}
+	\begin{gathered}
+	d_{\text{euclidean}}=\sqrt{\sum_{j}\bigl(w_j(x_{ij}-z_j)\bigr)^2},\\
+	d_{\text{manhattan}}=\sum_{j}w_j\lvert x_{ij}-z_j\rvert,\\
+	d_{\text{minkowski}}=\Bigl(\sum_{j}\bigl(w_j\lvert x_{ij}-z_j\rvert\bigr)^p\Bigr)^{1/p}.
+	\end{gathered}
+\end{equation}
+Bobot fitur $w_j$ bernilai 1 secara bawaan. Parameter \texttt{feature\_weights}
+dapat mengubahnya per nama fitur. Satu nama juga berlaku untuk semua kolom
+\textit{one-hot} yang diawali nama tersebut, misalnya \texttt{booking\_channel}
+untuk semua kolom \texttt{booking\_channel\_*}.
+
+Setelah $k$ tetangga terdekat $N_k(z)$ ditemukan, peluang setiap kelas dihitung
+dari suara tetangga,
+\begin{equation}
+	\begin{gathered}
+	P(c\mid z)=\frac{\sum_{i\in N_k(z)}v_i\,[y_i=c]}{\sum_{i\in N_k(z)}v_i},\\
+	v_i=\begin{cases}1 & \texttt{vote\_weights="uniform"}\\ 1/d(x_i,z)^2 & \texttt{vote\_weights="inverse\_square"}\end{cases}
+	\end{gathered}
+\end{equation}
+Pada \texttt{inverse\_square}, jika ada tetangga yang jaraknya tepat 0, hanya
+tetangga tersebut yang memberi suara agar tidak terjadi pembagian dengan nol.
+\texttt{predict} memilih kelas dengan peluang terbesar. Jika \texttt{threshold}
+diisi, kelas 1 dipilih jika $P(1\mid z)\ge\texttt{threshold}$.
+
+\subsection{Perhitungan Jarak}
+
+Jarak dihitung untuk satu \textit{batch} baris uji terhadap seluruh data latih
+sekaligus dengan operasi matriks NumPy.
+\begin{itemize}
+	\item Untuk jarak Euclidean, $\lVert x-z\rVert^2$ diuraikan menjadi
+	$\lVert x\rVert^2+\lVert z\rVert^2-2\,x^\top z$. Norma kuadrat data latih
+	dihitung sekali, lalu suku $x^\top z$ untuk satu \textit{batch} cukup dihitung
+	dengan satu perkalian matriks. Nilai negatif kecil akibat galat
+	\textit{floating point} dipotong menjadi 0 sebelum diakarkan.
+	\item Untuk jarak Manhattan dan Minkowski, selisih setiap pasangan baris
+	dihitung dengan \textit{broadcasting} menjadi tensor
+	(\textit{batch}, $n$, $d$), lalu dijumlahkan sepanjang sumbu fitur.
+	\item Ukuran \textit{batch} dibatasi paling banyak 128 baris, dan dikecilkan
+	lagi agar tensor selisih (\textit{batch}, $n$, $d$) tidak melebihi 16 juta
+	elemen (sekitar 128 MB dalam \textit{float64}).
+\end{itemize}
+
+\subsection{Pemilihan Tetangga}
+
+Fungsi \texttt{\_nearest\_indices} memilih $k$ tetangga tanpa mengurutkan
+seluruh jarak.
+\begin{enumerate}
+	\item \texttt{np.argpartition} menemukan $k$ jarak terkecil dalam $O(n)$.
+	\item Jarak terbesar di antara $k$ kandidat tersebut menjadi batas. Semua
+	baris yang jaraknya lebih kecil daripada batas pasti terpilih.
+	\item Sisa tempat diisi baris yang jaraknya sama dengan batas, mulai dari
+	indeks terkecil. Dengan cara ini, tetangga yang terpilih saat jaraknya seri
+	tidak bergantung pada urutan internal \texttt{argpartition}, sehingga
+	prediksi selalu sama.
+	\item Tetangga diurutkan menurut (jarak, indeks).
+\end{enumerate}
+KNN tidak mempelajari bobot fitur sehingga tidak dapat meranking fiturnya
+sendiri. Untuk seleksi fitur, \texttt{KNN} dibungkus dengan
+\texttt{Pipeline(select=k, ranker=DTL(...))}, yang memakai
+\texttt{feature\_importances\_} DTL sebagai pemeringkat
+(Subbab~\ref{sec:seleksi}). Semua parameter diperiksa di \texttt{set\_params}
+sehingga nilai yang tidak valid, misalnya $k<1$ atau $p<1$, langsung ditolak.
+
+\lstinputlisting[caption={Penyimpanan data latih (\texttt{src/models/knn.py})},linerange={93,96-97,109-114,134}]{../src/models/knn.py}
+
+\lstinputlisting[caption={Perhitungan jarak dan voting (\texttt{src/models/knn.py})},linerange={136,150,156-214}]{../src/models/knn.py}
+
+\lstinputlisting[caption={Pemilihan $k$ tetangga (\texttt{src/models/knn.py})},linerange={230-237}]{../src/models/knn.py}
 
 \section{Logistic Regression}
 \label{sec:lr}
 
-\todo{Implementasi \texttt{LogisticRegression.fit} dan \texttt{predict} di
-\texttt{src/models/logistic\_regression.py} belum selesai. Parameter yang sudah
-disiapkan: \texttt{lr}, \texttt{n\_iter}, \texttt{reg} (L1/L2), dan \texttt{lam}.
-Jelaskan fungsi sigmoid, \textit{log-loss}, \textit{gradient descent}, dan
-regularisasi beserta potongan kode.}
+\subsection{Formulasi}
+
+Kelas \texttt{LogisticRegression} di \texttt{src/models/logistic\_regression.py}
+memodelkan peluang pembatalan sebagai fungsi sigmoid dari kombinasi linear
+fitur~\cite{khodra2021lrwhat},
+\begin{equation}
+	P(y=1\mid x)=\sigma(z)=\frac{1}{1+e^{-z}},\qquad z=w^\top x+b .
+\end{equation}
+Fungsi \texttt{\_sigmoid} menghitung $1/(1+e^{-z})$ untuk $z\ge0$ dan
+$e^{z}/(1+e^{z})$ untuk $z<0$ agar $e^{-z}$ tidak \textit{overflow} pada $z$
+negatif yang besar. Parameter $(w,b)$ dicari dengan meminimalkan
+\textit{log-loss} rata-rata ditambah regularisasi,
+\begin{equation}
+	J(w,b)=\frac{1}{n}\sum_{i=1}^{n}\Bigl[\log\bigl(1+e^{z_i}\bigr)-y_i z_i\Bigr]+\lambda R(w).
+\end{equation}
+Suku dalam kurung sama dengan $-[y_i\log p_i+(1-y_i)\log(1-p_i)]$, tetapi
+dihitung dengan \texttt{np.logaddexp} agar stabil secara numerik. Regularisasi
+dipilih dengan parameter \texttt{reg}, dengan kekuatan $\lambda$ (\texttt{lam}).
+Bias $b$ tidak diregularisasi.
+\begin{table}[H]
+	\centering
+	\caption{Regularisasi Logistic Regression}
+	\label{tab:reg-lr}
+	\begin{tabular}{l l l}
+		\toprule
+		\texttt{reg} & $R(w)$ & $\nabla R(w)$ \\
+		\midrule
+		\texttt{None} & $0$ & $0$ \\
+		\texttt{"l1"} & $\sum_j\lvert w_j\rvert$ & $\operatorname{sign}(w)$ \\
+		\texttt{"l2"} & $\tfrac12\sum_j w_j^2$ & $w$ \\
+		\texttt{"elasticnet"} & $r\sum_j\lvert w_j\rvert+\tfrac{1-r}{2}\sum_j w_j^2$ & $r\operatorname{sign}(w)+(1-r)\,w$ \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+L1 mendorong bobot fitur yang kurang berguna tepat ke 0 sehingga sekaligus
+menyeleksi fitur. L2 mengecilkan semua bobot secara merata tanpa membuatnya nol.
+\textit{Elastic Net} menggabungkan keduanya dengan proporsi $r$
+(\texttt{l1\_ratio}). Karena $\lvert w_j\rvert$ tidak terdiferensiasi di 0,
+L1 memakai \textit{subgradient} $\operatorname{sign}(w_j)$, dengan
+$\operatorname{sign}(0)=0$.
+
+\subsection{\textit{Stochastic Gradient Ascent}}
+
+Pelatihan mengikuti \textit{stochastic gradient ascent} pada materi
+kuliah~\cite{khodra2021lrsga}: memaksimalkan \textit{log-likelihood} sama dengan
+meminimalkan \textit{log-loss}. Bobot dimulai dari nol, lalu setiap langkah
+memakai satu sampel.
+\begin{enumerate}
+	\item Pilih satu indeks $i$ secara acak dengan generator ber-\textit{seed}
+	(\texttt{random\_state}) agar hasil pelatihan dapat direproduksi.
+	\item Hitung $p_i=\sigma(w^\top x_i+b)$ dan residu $y_i-p_i$.
+	\item Perbarui parameter dengan laju belajar $\eta$ (\texttt{lr}):
+	\begin{equation}
+		w\leftarrow w+\eta\bigl[(y_i-p_i)\,x_i-\lambda\nabla R(w)\bigr],\qquad
+		b\leftarrow b+\eta\,(y_i-p_i).
+	\end{equation}
+\end{enumerate}
+Parameter \texttt{n\_iter} adalah jumlah pembaruan satu sampel, bukan jumlah
+\textit{epoch}. Selama pelatihan, nilai $J(w,b)$ pada seluruh data latih dicatat
+setiap \texttt{eval\_interval} langkah (\texttt{loss\_history\_}), dan
+$(b,w)$ dicatat setiap \texttt{history\_interval} langkah
+(\texttt{coef\_history\_}) sehingga lintasan parameter selama pelatihan dapat
+digambar. \texttt{predict\_proba} mengembalikan $[1-p,\ p]$, dan \texttt{predict}
+mengembalikan 1 jika $p\ge\texttt{threshold}$ (bawaan 0,5).
+
+\lstinputlisting[caption={Pelatihan dengan \textit{stochastic gradient ascent} (\texttt{src/models/logistic\_regression.py})},linerange={29-31,45-48,58-71,96}]{../src/models/logistic_regression.py}
+
+\lstinputlisting[caption={Prediksi dan sigmoid (\texttt{src/models/logistic\_regression.py})},linerange={98-111,120-127}]{../src/models/logistic_regression.py}
+
+\lstinputlisting[caption={Regularisasi dan fungsi objektif (\texttt{src/models/logistic\_regression.py})},linerange={129-158}]{../src/models/logistic_regression.py}
+
+\subsection{Optimasi \textit{Solver}: L-BFGS (Bonus)}
+\label{sec:lbfgs}
+
+\textit{Stochastic gradient ascent} memakai satu sampel per langkah sehingga arah
+pembaruannya berisik dan laju belajarnya harus dipilih manual. Modul
+\texttt{src/logistic\_submission.py} menyediakan tiga \textit{solver}
+\textit{from scratch} (hanya NumPy) untuk fungsi objektif yang sama dengan
+regularisasi L2,
+\begin{equation}
+	J(\theta)=\frac{1}{n}\sum_{i}s_i\log\bigl(1+e^{-(2y_i-1)z_i}\bigr)+\frac{\mu}{2}\lVert w\rVert^2,
+	\qquad \nabla J(\theta)=\Bigl[\tfrac1n\textstyle\sum_i r_i,\ \tfrac1n X^\top r+\mu w\Bigr],
+\end{equation}
+dengan $\theta=(b,w)$, $r_i=s_i(\sigma(z_i)-y_i)$, bobot sampel $s_i$, dan
+$\mu=1/(Cn)$. Ketiga \textit{solver} tersebut adalah sebagai berikut.
+\begin{enumerate}
+	\item \textbf{\textit{Batch gradient descent}}
+	(\texttt{gradient\_descent\_minimize}) memakai gradien seluruh data. Panjang
+	langkahnya dipilih dengan \textit{backtracking} Armijo~\cite{armijo1966}:
+	langkah $t$ dibagi dua sampai $J(\theta+td)\le J(\theta)+c_1t\,\nabla J^\top d$,
+	lalu langkah berikutnya dimulai dari $1{,}25t$.
+	\item \textbf{\textit{Mini-batch} SGD} (\texttt{minibatch\_sgd\_minimize})
+	memakai 512 sampel per pembaruan dengan laju belajar
+	$\eta_t=\eta_0/\sqrt{1+10^{-3}t}$ yang mengecil. Pelatihan berhenti jika $J$
+	tidak turun selama 10 \textit{epoch}, dan parameter dengan $J$ terkecil yang
+	dikembalikan.
+	\item \textbf{L-BFGS} (\texttt{lbfgs\_minimize}) adalah metode
+	\textit{quasi-Newton}~\cite{liu1989lbfgs}.
+\end{enumerate}
+
+\textbf{Cara L-BFGS mengoptimasi model.} Metode Newton memakai arah
+$-H^{-1}\nabla J$, dengan $H$ matriks Hessian, sehingga langkahnya menyesuaikan
+kelengkungan fungsi objektif di setiap arah. Gradient descent hanya memakai
+$-\nabla J$, sehingga langkahnya lambat pada arah yang landai dan berosilasi pada
+arah yang curam. Menyimpan $H$ berukuran $d\times d$ mahal. L-BFGS hanya
+menyimpan $m=10$ pasangan terakhir $s_k=\theta_{k+1}-\theta_k$ dan
+$y_k=\nabla J_{k+1}-\nabla J_k$, lalu menghitung $H^{-1}\nabla J$ secara implisit
+dengan \textit{two-loop recursion}:
+\begin{enumerate}
+	\item $q\leftarrow\nabla J$. Dari pasangan terbaru ke terlama, hitung
+	$\alpha_k=\rho_k s_k^\top q$ dan $q\leftarrow q-\alpha_k y_k$, dengan
+	$\rho_k=1/(y_k^\top s_k)$.
+	\item Skalakan $q$ dengan $\gamma=s^\top y/y^\top y$ dari pasangan terbaru.
+	\item Dari pasangan terlama ke terbaru, hitung $\beta=\rho_k y_k^\top q$ dan
+	$q\leftarrow q+s_k(\alpha_k-\beta)$. Arah pencarian adalah $d=-q$.
+\end{enumerate}
+Panjang langkah dipilih dengan \textit{line search} yang memenuhi kondisi
+\textit{strong Wolfe}~\cite{wolfram2026stepcontrol}, yaitu penurunan cukup
+$J(\theta+td)\le J(\theta)+c_1t\,\nabla J^\top d$ dan kelengkungan
+$\lvert\nabla J(\theta+td)^\top d\rvert\le c_2\lvert\nabla J^\top d\rvert$ dengan
+$c_1=10^{-4}$ dan $c_2=0{,}9$. Kondisi kelengkungan menjamin $s_k^\top y_k>0$
+sehingga aproksimasi $H^{-1}$ tetap definit positif dan $d$ selalu arah turun.
+Pasangan dengan $s_k^\top y_k$ yang terlalu kecil tidak disimpan. Jika
+\textit{line search} gagal, \textit{backtracking} Armijo dipakai sebagai
+cadangan. Karena fungsi objektif ini konveks dan mulus, arah
+\textit{quasi-Newton} umumnya mencapai minimum dalam jauh lebih sedikit iterasi
+daripada \textit{gradient descent}. Model \texttt{lr} pada perbandingan utama tetap
+memakai kelas \texttt{LogisticRegression}; ketiga \textit{solver} dibandingkan pada
+bagian \textit{Bonus Optimisasi Logistic Regression} di \textit{notebook}. Pelatihan berhenti jika $\lVert\nabla J\rVert_\infty\le10^{-5}$
+atau perubahan $J$ relatif di bawah $10^{-9}$.
+
+\lstinputlisting[caption={Fungsi objektif berbobot dan gradiennya (\texttt{src/logistic\_submission.py})},linerange={590-603}]{../src/logistic_submission.py}
+
+\lstinputlisting[caption={L-BFGS: \textit{two-loop recursion} dan pembaruan memori (\texttt{src/logistic\_submission.py})},linerange={479-482,494-575}]{../src/logistic_submission.py}
 
 \section{Support Vector Machine}
 \label{sec:svm}
