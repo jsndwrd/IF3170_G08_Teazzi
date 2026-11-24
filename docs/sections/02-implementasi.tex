@@ -146,13 +146,109 @@ $|w|$ dipakai untuk seleksi fitur (Subbab~\ref{sec:seleksi}).
 \section{Decision Tree Learning}
 \label{sec:dtl}
 
-\todo{Implementasi \texttt{DTL.fit} dan \texttt{DTL.predict} di
-\texttt{src/models/dtl.py} belum selesai. Parameter yang sudah disiapkan:
-\texttt{criterion} (\texttt{entropy}/\texttt{gini}), \texttt{max\_depth}, dan
-\texttt{min\_samples\_split}. Jelaskan perhitungan \textit{information gain},
-penanganan atribut kontinu, kriteria berhenti, dan potongan kode. Jika DTL
-menyediakan \texttt{feature\_importances\_}, \texttt{Pipeline} otomatis dapat
-memakainya untuk seleksi fitur.}
+\subsection{Formulasi}
+
+Kelas \texttt{DTL} di \texttt{src/models/dtl.py} membangun pohon keputusan biner.
+Setiap simpul dalam menguji satu fitur terhadap satu ambang, $x_f\le t$. Sampel
+yang memenuhi syarat masuk ke cabang kiri, dan sisanya masuk ke cabang kanan.
+Ukuran pemilihan atribut mengikuti ID3/C4.5, yaitu \textit{information gain}
+berbasis entropi, sedangkan bentuk pohonnya biner seperti CART. Untuk himpunan
+sampel $S$ dengan proporsi kelas $p_c$, \textit{impurity} dihitung dengan salah
+satu kriteria berikut (parameter \texttt{criterion}):
+\begin{equation}
+	H(S)=-\sum_{c}p_c\log_2 p_c \quad(\texttt{entropy}),\qquad
+	G(S)=1-\sum_{c}p_c^2 \quad(\texttt{gini}).
+\end{equation}
+Pemisahan $S$ menjadi $S_L$ dan $S_R$ dinilai dengan \textit{information gain}
+\begin{equation}
+	\text{Gain}(S,f,t)=I(S)-\frac{|S_L|}{|S|}I(S_L)-\frac{|S_R|}{|S|}I(S_R),
+\end{equation}
+dengan $I$ adalah $H$ atau $G$. Pada setiap simpul, pasangan $(f,t)$ dengan
+\textit{gain} terbesar dipilih, lalu pohon tumbuh secara rekursif pada kedua
+cabang.
+
+\subsection{Atribut Kontinu}
+
+Setelah \textit{preprocessing}, semua fitur sudah berupa bilangan. Atribut
+kategorikal sudah diubah dengan \textit{ordinal} atau \textit{one-hot encoding}
+(Bab~3), sehingga ambang pada kolom \textit{one-hot} berarti ``kategori ini
+dibandingkan dengan kategori lain''. Kandidat ambang untuk setiap fitur dicari
+sebagai berikut.
+\begin{enumerate}
+	\item Urutkan nilai fitur pada simpul tersebut.
+	\item Kandidat ambang adalah titik tengah antara dua nilai berurutan yang
+	berbeda. Ambang di antara dua nilai yang sama tidak mungkin memisahkannya.
+	\item Jumlah setiap kelas di cabang kiri untuk semua kandidat dihitung
+	sekaligus dengan \textit{cumulative sum} atas label yang sudah diurutkan.
+	Jumlah di cabang kanan adalah jumlah total dikurangi jumlah kiri.
+	\item \textit{Gain} semua kandidat dihitung dalam satu operasi vektor NumPy,
+	lalu kandidat terbaik dibandingkan antarfitur.
+\end{enumerate}
+Dengan cara ini, satu fitur pada satu simpul cukup diproses dalam
+$O(n\log n)$ untuk pengurutan, bukan $O(n^2)$ jika setiap ambang dihitung ulang
+dari awal. Jika titik tengah dua bilangan \textit{floating point} yang sangat
+berdekatan terbulatkan ke nilai yang lebih besar, nilai yang lebih kecil dipakai
+sebagai ambang agar kedua sisi tetap terpisah. Jika beberapa pemisahan memiliki
+\textit{gain} yang sama, fitur dengan indeks terkecil yang dipilih.
+
+\subsection{Kriteria Berhenti dan Prediksi}
+
+Sebuah simpul menjadi daun jika salah satu kondisi berikut terpenuhi.
+\begin{enumerate}
+	\item Semua sampel pada simpul memiliki kelas yang sama.
+	\item Jumlah sampel kurang dari \texttt{min\_samples\_split}.
+	\item Kedalaman simpul sudah mencapai \texttt{max\_depth}.
+	\item Tidak ada pemisahan dengan \textit{gain} positif, misalnya karena semua
+	fitur pada simpul bernilai sama.
+\end{enumerate}
+Simpul dalam disimpan sebagai \textit{tuple} (fitur, ambang, kiri, kanan),
+sedangkan daun menyimpan proporsi kelas dari sampel latih yang sampai ke daun
+tersebut. \texttt{predict\_proba} menelusuri pohon dari akar sampai daun dan
+mengembalikan proporsi tersebut. \texttt{predict} mengembalikan kelas mayoritas
+pada daun. Parameter \texttt{max\_depth} dan \texttt{min\_samples\_split} membatasi
+ukuran pohon agar tidak \textit{overfitting}. Konfigurasi di \textit{notebook}
+memakai \texttt{criterion="entropy"} dan \texttt{max\_depth} $=10$. Pohon ini
+memiliki kedalaman 10 dan 344 daun jika dilatih pada \texttt{X\_train}.
+
+Pohon keputusan tidak dipengaruhi skala fitur karena setiap pemisahan hanya
+membandingkan nilai satu fitur dengan ambang. Karena itu, DTL memakai varian
+\textit{preprocessing} \texttt{tree} tanpa \textit{capping} dan standardisasi
+(Tabel~\ref{tab:varian-prep}). Nilai hilang tetap diimputasi lebih dahulu karena
+implementasi ini tidak menangani NaN.
+
+\subsection{\textit{Feature Importance}}
+
+Setiap kali fitur $f$ dipakai untuk memisahkan simpul dengan $n_t$ sampel,
+nilai $n_t\cdot\text{Gain}$ ditambahkan ke skor fitur tersebut. Setelah pohon
+selesai dibangun, skor dinormalkan agar jumlahnya 1 dan disimpan di
+\texttt{feature\_importances\_}. Ukuran ini sama dengan \textit{mean decrease in
+impurity} pada scikit-learn. \texttt{Pipeline} memakai atribut ini untuk seleksi
+fitur (Subbab~\ref{sec:seleksi}). Misalnya, KNN memakai
+\texttt{DTL(max\_depth=10, min\_samples\_split=50)} sebagai pemeringkat. Pada
+\texttt{X\_train}, lima fitur terpenting adalah \texttt{days\_before\_arrival}
+(0,277), \texttt{lead\_x\_price} (0,140), \texttt{special\_requests} (0,119),
+\texttt{booking\_channel} Online Travel Agent (0,117), dan \texttt{date\_rate}
+(0,095).
+
+\subsection{Verifikasi}
+
+Dengan \texttt{criterion="entropy"} dan \texttt{max\_depth} $=10$, \texttt{DTL}
+dibandingkan dengan \texttt{DecisionTreeClassifier} scikit-learn pada data dan
+parameter yang sama. Prediksi kedua model sama pada 99,6\% baris \texttt{X\_val}.
+\textit{Macro F1} \textit{hold-out} adalah 0,8355 untuk \texttt{DTL} dan 0,8371
+untuk scikit-learn, sedangkan rata-rata 5-\textit{fold} adalah 0,8220 dan 0,8224.
+Perbedaan ini berasal dari cara memilih di antara pemisahan yang \textit{gain}-nya
+sama. Scikit-learn mengacak urutan fitur sehingga hasilnya juga berubah menurut
+\texttt{random\_state}: dengan \textit{seed} 0 sampai 4, \textit{macro F1}
+\textit{hold-out}-nya berkisar 0,8343--0,8357. Skor \texttt{DTL} berada di dalam
+rentang tersebut. Sebagai gantinya, \texttt{DTL} memilih fitur dengan indeks
+terkecil sehingga hasilnya selalu sama.
+
+\lstinputlisting[caption={Pelatihan pohon (\texttt{src/models/dtl.py})},linerange={7,9-10,13-21,32-43}]{../src/models/dtl.py}
+
+\lstinputlisting[caption={\textit{Impurity} dan pencarian pemisahan terbaik (\texttt{src/models/dtl.py})},linerange={46-52,55-72}]{../src/models/dtl.py}
+
+\lstinputlisting[caption={Prediksi DTL (\texttt{src/models/dtl.py})},linerange={24-25,28-29,74-79}]{../src/models/dtl.py}
 
 \section{Bayesian Network}
 \label{sec:bn}
@@ -161,9 +257,9 @@ memakainya untuk seleksi fitur.}
 
 \textit{Bayesian network} adalah graf berarah tanpa siklus (DAG) yang tiap
 simpulnya memiliki \textit{conditional probability table} (CPT) terhadap
-\textit{parent}-nya. Implementasi ini adalah klasifikator Bayesian network atas
+\textit{parent}-nya~\cite{kkif2026bayesnet}. Implementasi ini adalah klasifikator Bayesian network atas
 fitur terdiskretisasi, dengan kelas $C$ (\texttt{is\_canceled}) sebagai
-\textit{parent} dari semua fitur $X_1,\dots,X_d$ ($d=37$). Posterior kelas
+\textit{parent} dari semua fitur $X_1,\dots,X_d$ ($d=30$). Posterior kelas
 dihitung dengan teorema Bayes,
 \begin{equation}
 	P(c\mid x)\ \propto\ P(c)\prod_{i=1}^{d}P\bigl(x_i\mid c,\ x_{\mathrm{pa}(i)}\bigr),
@@ -171,7 +267,7 @@ dihitung dengan teorema Bayes,
 dengan $\mathrm{pa}(i)$ adalah fitur \textit{parent} dari $X_i$ (jika ada).
 Jika tidak ada fitur \textit{parent}, rumus ini menjadi \textit{Naive Bayes}
 $P(c)\prod_i P(x_i\mid c)$ yang mengasumsikan fitur saling bebas jika kelas
-diketahui. Parameter bawaan memilih \textit{Naive Bayes},
+diketahui~\cite{kkif2026bayesnet}. Parameter bawaan memilih \textit{Naive Bayes},
 \texttt{tree=True} memilih TAN (Subbab~\ref{sec:tan}), dan \texttt{k}$>0$
 memilih KDB (Subbab~\ref{sec:kdb}).
 
@@ -190,7 +286,7 @@ nilai, CPT diestimasi dari hitungan $n$ pada data latih,
 	P(x_i=v\mid c,\ x_{\mathrm{pa}(i)}=u)=\frac{n(c,u,v)+\alpha}{\sum_{v'}n(c,u,v')+\alpha k},
 \end{equation}
 dengan $\alpha=1$ (\texttt{alpha}). Penambahan $\alpha$ mencegah probabilitas 0
-untuk kombinasi yang tidak muncul di data latih.
+untuk kombinasi yang tidak muncul di data latih~\cite{kkif2026bayesnet}.
 
 \textbf{Inferensi di ruang log.} Perkalian puluhan probabilitas kecil dapat
 membuat hasil kali menjadi 0 pada bilangan \textit{floating point}
@@ -198,11 +294,11 @@ membuat hasil kali menjadi 0 pada bilangan \textit{floating point}
 $\log P(c)+\sum_i\log P(x_i\mid c,x_{\mathrm{pa}(i)})$, lalu dinormalkan dengan
 mengurangi skor terbesar tiap baris sebelum dieksponensialkan.
 
-\lstinputlisting[caption={Diskretisasi (\texttt{src/models/bayes\_network.py})},linerange={43-44,46-48,50-66}]{../src/models/bayes_network.py}
+\lstinputlisting[caption={Diskretisasi (\texttt{src/models/bayes\_network.py})},linerange={44-45,47-49,51-67}]{../src/models/bayes_network.py}
 
-\lstinputlisting[caption={Pelatihan CPT (\texttt{src/models/bayes\_network.py})},linerange={145-178}]{../src/models/bayes_network.py}
+\lstinputlisting[caption={Pelatihan CPT (\texttt{src/models/bayes\_network.py})},linerange={146-179}]{../src/models/bayes_network.py}
 
-\lstinputlisting[caption={Inferensi posterior (\texttt{src/models/bayes\_network.py})},linerange={180-205}]{../src/models/bayes_network.py}
+\lstinputlisting[caption={Inferensi posterior (\texttt{src/models/bayes\_network.py})},linerange={181-206}]{../src/models/bayes_network.py}
 
 \subsection{Optimasi Struktur dengan TAN (Bonus)}
 \label{sec:tan}
@@ -239,7 +335,7 @@ tetap terkendali dan kelas tetap menjadi \textit{parent} semua fitur, sehingga
 inferensi tetap berupa satu perkalian CPT per fitur. Hasil percobaannya ada pada
 Subbab~\ref{sec:hasil-bn}.
 
-\lstinputlisting[caption={\textit{Conditional mutual information} dan pohon Prim (\texttt{src/models/bayes\_network.py})},linerange={68-81,92-122}]{../src/models/bayes_network.py}
+\lstinputlisting[caption={\textit{Conditional mutual information} dan pohon Prim (\texttt{src/models/bayes\_network.py})},linerange={69-82,93-123}]{../src/models/bayes_network.py}
 
 \subsection{Optimasi Struktur dengan KDB (Bonus)}
 \label{sec:kdb}
@@ -270,11 +366,11 @@ $P(x_i\mid c,x_{\mathrm{pa}_1(i)},\dots,x_{\mathrm{pa}_k(i)})$ dengan rumus
 inferensi adalah jumlah sumbu \textit{parent} pada CPT. Nilai $k$ dipilih dengan
 validasi silang (Subbab~\ref{sec:hasil-kdb}).
 
-\lstinputlisting[caption={\textit{Mutual information} dan struktur KDB (\texttt{src/models/bayes\_network.py})},linerange={83-90,124-143}]{../src/models/bayes_network.py}
+\lstinputlisting[caption={\textit{Mutual information} dan struktur KDB (\texttt{src/models/bayes\_network.py})},linerange={84-91,125-144}]{../src/models/bayes_network.py}
 
 \textbf{CPT \textit{sparse}.} Ukuran CPT tumbuh eksponensial terhadap $k$. Pada
 $k=10$, satu CPT bisa memiliki $2\times5^{10}\times5\approx 9{,}8\times10^{7}$ sel,
-sedangkan data latih hanya 21.898 baris sehingga hampir semua sel kosong. CPT
+sedangkan data latih hanya 21.857 baris sehingga hampir semua sel kosong. CPT
 yang lebih besar dari \texttt{DENSE\_LIMIT} (100.000 sel) karena itu disimpan
 sebagai \texttt{SparseCPT}, yang hanya menyimpan hitungan sel yang terisi.
 Kombinasi (kelas, \textit{bin parent}) diubah menjadi satu bilangan dengan
@@ -285,7 +381,7 @@ smoothing} yang sama, sehingga hasil prediksinya identik dengan CPT padat.
 Perbedaannya hanya pada memori: model $k=10$ tersimpan sebagai berkas sekitar 7 MB,
 sedangkan versi padat berukuran ratusan MB.
 
-\lstinputlisting[caption={CPT \textit{sparse} (\texttt{src/models/bayes\_network.py})},linerange={21-40}]{../src/models/bayes_network.py}
+\lstinputlisting[caption={CPT \textit{sparse} (\texttt{src/models/bayes\_network.py})},linerange={22-41}]{../src/models/bayes_network.py}
 
 \subsection{Visualisasi Graf (Bonus)}
 
@@ -301,7 +397,7 @@ dipakai oleh \texttt{fit} maupun \texttt{predict}.
 \begin{figure}[H]
 	\centering
 	\includegraphics[width=0.95\textwidth]{bayes_graph}
-	\caption{Struktur TAN yang dipelajari dari \texttt{X\_train} (kelas, 37 fitur, 36 edge antarfitur)}
+	\caption{Struktur TAN yang dipelajari dari \texttt{X\_train} (kelas, 30 fitur, 29 edge antarfitur)}
 	\label{fig:graf-bn}
 \end{figure}
 
@@ -322,7 +418,7 @@ Yang berubah hanya aturan keputusan pada \texttt{predict} (parameter
 \texttt{cost\_fp} dan \texttt{cost\_fn}), bukan data dan bukan pelatihan.
 Dengan biaya sama, aturan ini kembali menjadi ambang 0,5 (\texttt{argmax}).
 
-\lstinputlisting[caption={Aturan keputusan sensitif-biaya (\texttt{src/models/bayes\_network.py})},linerange={208-215}]{../src/models/bayes_network.py}
+\lstinputlisting[caption={Aturan keputusan sensitif-biaya (\texttt{src/models/bayes\_network.py})},linerange={209-216}]{../src/models/bayes_network.py}
 
 \section{Validasi dan Utilitas Eksperimen}
 
