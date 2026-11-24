@@ -8,11 +8,12 @@ Setiap model dievaluasi dengan \textit{macro F1-score} melalui dua cara berikut.
 	\texttt{X\_train}, lalu rata-rata dan simpangan baku kelima \textit{fold}
 	dilaporkan.
 \end{enumerate}
-Semua model menerima tiga puluh fitur hasil \textit{preprocessing} pada Bab~3
-dengan \textit{seed} 42. Setiap model \textit{from scratch} dibandingkan dengan
-model scikit-learn yang setara~\cite{sklearn2026docs}. Untuk SVM, pembanding
-\texttt{SVC} memakai \textit{hyperparameter} yang sama persis sehingga perbedaan
-skor hanya dapat berasal dari implementasinya.
+Semua model menggunakan pembagian data dengan \textit{seed} 42, tetapi matriks
+fiturnya mengikuti \textit{preprocessing} khusus model pada Bab~3. Setiap model
+\textit{from scratch} dibandingkan dengan model scikit-learn yang
+setara~\cite{sklearn2026docs}. Untuk SVM, pembanding \texttt{SVC} memakai
+\textit{hyperparameter} dan fitur yang sama sehingga perbedaan skor berasal dari
+implementasinya.
 
 \section{Perbandingan dengan Pustaka}
 
@@ -34,8 +35,8 @@ skor hanya dapat berasal dari implementasinya.
 		  & \texttt{KNeighborsClassifier} & 0,8152 & 0,8069 & 0,0052 \\
 		\midrule
 		Logistic Regression
-		  & \textit{from scratch} & - & - & - \\
-		  & \texttt{LogisticRegression} & 0,7713 & 0,7656 & 0,0084 \\
+		  & \textit{from scratch} & 0,7597 & 0,6861 & 0,0397 \\
+		  & \texttt{LogisticRegression} & 0,8017 & 0,7914 & 0,0034 \\
 		\midrule
 		DTL (CART, \texttt{ccp\_alpha} $=3\times10^{-4}$)
 		  & \textit{from scratch} & 0,8277 & 0,8223 & 0,0070 \\
@@ -50,9 +51,16 @@ skor hanya dapat berasal dari implementasinya.
 	\end{tabular}
 \end{table}
 
-\todo{Isi baris \textit{from scratch} KNN dan Logistic Regression setelah
-implementasinya selesai (jalankan sel \textit{Model Comparison} di
-\textit{notebook}).}
+Skor pada tabel ini berasal dari konfigurasi model dasar pada \textit{notebook}.
+Implementasi \textit{from scratch} memakai \textit{stochastic gradient ascent}
+tanpa regularisasi, sedangkan \texttt{LogisticRegression} scikit-learn memakai
+regularisasi L2 bawaan. Karena itu, tabel ini membandingkan konfigurasi dasar,
+bukan dua model dengan \textit{hyperparameter} yang identik. Eksperimen fitur
+c010 dan perbandingan \textit{solver}-nya dibahas terpisah pada
+Subbab~\ref{sec:hasil-lr-solver}.
+
+\todo{Isi baris \textit{from scratch} KNN setelah implementasinya selesai
+(jalankan sel \textit{Model Comparison} di \textit{notebook}).}
 
 \section{Hasil Support Vector Machine}
 
@@ -104,9 +112,11 @@ Simpangan baku antar-\textit{fold} kecil (0,006), dan skor \textit{hold-out} dek
 dengan rata-rata \textit{k-fold}. Kinerja SVM tidak bergantung pada satu cara
 pembagian data tertentu.
 
-SVM RBF mengungguli Logistic Regression scikit-learn (0,8384 dan 0,7713). Selisih
-ini mengindikasikan bahwa batas keputusan antara kedua kelas tidak linear sehingga
-model linear dengan fitur yang sama tidak dapat menangkapnya sepenuhnya.
+SVM RBF memperoleh \textit{macro F1} 0,8384, sedangkan Logistic Regression
+scikit-learn pada varian fitur \texttt{lr} memperoleh 0,8017. Karena kedua model
+menggunakan varian \textit{preprocessing} yang berbeda, selisih ini tidak dapat
+diatribusikan hanya pada bentuk batas keputusan; rekayasa fitur dan model juga
+berbeda.
 
 \texttt{GaussianNB} hanya mencapai 0,3773. Model ini mengasumsikan setiap fitur
 berdistribusi normal dan saling bebas jika kelasnya diketahui. Banyak fitur pada
@@ -573,9 +583,75 @@ dipilih sebagai konfigurasi akhir. Dibandingkan pohon tanpa \textit{pruning}
 0,0241. Nilai $5\times10^{-4}$ (0,8221) praktis setara karena selisihnya jauh di
 bawah simpangan baku antar-\textit{fold}.
 
-\todo{Tambahkan hasil \textit{tuning} KNN dan Logistic Regression serta tabel
-\texttt{ranking} semua model. \textit{Tuning} Bayesian Network ada pada
-Subbab~\ref{sec:tuning-bn}.}
+\textit{Grid} Logistic Regression memvariasikan laju belajar
+$\texttt{lr}\in\{0{,}1,0{,}5\}$ dan jumlah pembaruan satu sampel
+$\texttt{n\_iter}\in\{1000,3000\}$. Tabel~\ref{tab:tuning-lr} menunjukkan
+rata-rata dan simpangan baku \textit{macro F1} pada lima \textit{fold}.
+
+\begin{table}[H]
+\centering
+\caption{Hasil \textit{tuning} Logistic Regression \textit{from scratch}}
+\label{tab:tuning-lr}
+\begin{tabular}{c c c c}
+\toprule
+\texttt{lr} & \texttt{n\_iter} & \textbf{5-\textit{fold} $\mu$} & \textbf{5-\textit{fold} $\sigma$} \\
+\midrule
+0,1 & 1.000 & \textbf{0,7274} & 0,0154 \\
+0,1 & 3.000 & 0,7222 & 0,0140 \\
+0,5 & 1.000 & 0,7050 & 0,0123 \\
+0,5 & 3.000 & 0,6861 & 0,0397 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Konfigurasi $\texttt{lr}=0{,}1$ dan $\texttt{n\_iter}=1000$ dipilih berdasarkan
+rata-rata \textit{cross-validation}. Pada \textit{hold-out}, konfigurasi ini
+mencapai \textit{macro F1} 0,7567. Skor \textit{hold-out} dan rata-rata
+\textit{cross-validation} mengukur pembagian data yang berbeda, sehingga tidak
+harus berurutan sama.
+
+\todo{Tambahkan hasil \textit{tuning} KNN serta tabel \texttt{ranking} semua
+model. \textit{Tuning} Bayesian Network ada pada Subbab~\ref{sec:tuning-bn}.}
+
+\section{Optimisasi Logistic Regression}
+\label{sec:hasil-lr-solver}
+
+Tiga \textit{solver} \textit{from scratch} dibandingkan pada fitur c010 yang
+sama (Subbab~\ref{sec:lr-c010-features}) menggunakan \textit{hold-out}
+terstratifikasi 20\% dengan \textit{seed} 42. Fungsi objektif memakai
+$C=0{,}1$ (koefisien penalti $\mu=1/(Cn)$) dan ambang klasifikasi 0,42.
+Tabel~\ref{tab:lr-solvers} menunjukkan bahwa L-BFGS memperoleh \textit{macro F1}
+tertinggi sekaligus \textit{log-loss} terendah pada pembagian ini.
+
+\begin{table}[H]
+\centering
+\caption{Perbandingan \textit{solver} Logistic Regression pada fitur c010}
+\label{tab:lr-solvers}
+\small
+\begin{tabular}{l c c c c c}
+\toprule
+\textbf{Solver} & \textbf{Macro F1} & \textbf{Akurasi} & \textbf{Log-loss} & \textbf{Iterasi} & \textbf{Konvergen} \\
+\midrule
+\textit{Batch gradient descent} & 0,8420 & 0,8606 & 0,3115 & 1.500 & Tidak \\
+\textit{Mini-batch} SGD & 0,8424 & 0,8608 & 0,3115 & 120 \textit{epoch} & Tidak \\
+L-BFGS & \textbf{0,8499} & \textbf{0,8685} & \textbf{0,2911} & 906 & Ya \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Pada data validasi yang sama, L-BFGS menaikkan \textit{macro F1} sebesar 0,0076
+dari \textit{mini-batch} SGD dan 0,0080 dari \textit{batch gradient descent}.
+L-BFGS berhenti setelah toleransi perubahan fungsi tercapai. Dua metode gradien
+lainnya mencapai batas iterasi atau \textit{epoch} yang ditetapkan; skor
+\textit{mini-batch} SGD memakai parameter dengan nilai objektif terbaik selama
+pelatihan. Hasil ini hanya membandingkan ketiga \textit{solver} pada fitur c010
+dan satu pembagian validasi, bukan perbandingan dengan model SVM terbaik atau
+skor publik Kaggle.
+
+Setelah evaluasi, setiap \textit{solver} dilatih ulang dengan seluruh data
+\texttt{train.csv} untuk menghasilkan prediksi data uji. Notebook menyimpan
+ketiga berkas prediksi dan tabel metrik pada folder \texttt{output/}; rincian
+berkas L-BFGS tercantum pada Subbab~\ref{sec:prediksi-uji}.
 
 \section{Analisis Kesalahan}
 
@@ -705,9 +781,36 @@ kesalahan pada Online Travel Agent adalah 17,8\% (3.509 baris, rasio batal
 dan pada Corporate 9,3\% (300 baris). Seluruh 76 pemesanan Complimentary
 diprediksi benar karena tidak ada satu pun yang batal.
 
-\todo{Tambahkan \textit{confusion matrix} KNN dan Logistic Regression setelah \textit{tuning}.}
+\subsection{Logistic Regression}
+
+Untuk Logistic Regression \textit{from scratch} hasil \textit{tuning}
+($\texttt{lr}=0{,}1$, $\texttt{n\_iter}=1000$, ambang 0,5), matriks kebingungan
+pada 5.475 baris \texttt{X\_val} adalah sebagai berikut.
+
+\begin{table}[H]
+\centering
+\caption{Matriks kebingungan Logistic Regression \textit{from scratch} pada \texttt{X\_val}}
+\label{tab:cm-lr}
+\begin{tabular}{l r r}
+\toprule
+ & \textbf{Prediksi tidak batal} & \textbf{Prediksi batal} \\
+\midrule
+\textbf{Aktual tidak batal} & 3.204 & 477 \\
+\textbf{Aktual batal} & 664 & 1.130 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Model melewatkan 664 pembatalan dan salah menandai 477 pemesanan yang sebenarnya
+tidak batal. \textit{Recall} kelas batal adalah 0,630 dan \textit{precision}-nya
+0,703. Pola ini menunjukkan bahwa ambang 0,5 membuat model lebih sering melewatkan
+pembatalan daripada memberi peringatan palsu; hasil tersebut konsisten dengan
+\textit{macro F1} \textit{hold-out} sebesar 0,7567.
+
+\todo{Tambahkan \textit{confusion matrix} KNN setelah \textit{tuning}.}
 
 \section{Prediksi Data Uji}
+\label{sec:prediksi-uji}
 
 Model akhir, yaitu SVM RBF dengan $C=3$ dan $\gamma=0{,}1$, dilatih ulang dengan
 gabungan \texttt{X\_train} dan \texttt{X\_val} (27.332 baris). Pelatihan ini
@@ -724,3 +827,11 @@ tinggi daripada \textit{macro F1} \textit{hold-out} (0,8384) dan rata-rata
 5-\textit{fold} (0,8328). Salah satu kemungkinan penyebabnya adalah jumlah data
 latih model akhir yang 25\% lebih banyak, tetapi selisih ini juga dapat berasal
 dari perbedaan sampel data uji.
+
+Eksperimen Logistic Regression c010 juga menghasilkan berkas prediksi untuk
+6.844 baris data uji. Berkas
+\url{output/lr_calendar_density_c010_lbfgs_scratch.csv} dibuat dengan
+melatih ulang solver L-BFGS pada seluruh data latih setelah perbandingan
+validasi. Dua berkas solver lain dan tabel perbandingannya juga dihasilkan oleh
+sel notebook yang sama; berkas ini merupakan kandidat submisi Logistic
+Regression, terpisah dari model akhir keseluruhan yang dilaporkan di atas.

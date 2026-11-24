@@ -27,10 +27,17 @@ KDB, tetapi \textit{macro F1} TAN turun dari 0,7645 menjadi 0,7592.
 	\textit{macro F1} 5-\textit{fold} dari 0,7982 (pohon penuh) menjadi 0,8223 dan
 	memperkecil pohon dari 2.526 menjadi 122 daun. Skor dan prediksinya identik
 	dengan \texttt{DecisionTreeClassifier} scikit-learn dengan parameter yang sama.
-\end{enumerate}
+	\item Logistic Regression diimplementasikan \textit{from scratch} dengan
+	\textit{stochastic gradient ascent} dan regularisasi L1, L2, serta Elastic Net.
+	Pada konfigurasi dasar, \textit{grid search} memilih laju belajar 0,1 dan 1.000
+	pembaruan dengan rata-rata \textit{macro F1} 5-\textit{fold} 0,7274. Pada
+	eksperimen c010, L-BFGS memperoleh \textit{macro F1} validasi 0,8499, lebih
+	tinggi daripada \textit{mini-batch} SGD (0,8424) dan \textit{batch gradient
+	descent} (0,8420) pada fitur yang sama.
+	\end{enumerate}
 
-\todo{Tambahkan kesimpulan untuk KNN dan Logistic Regression, serta model
-terbaik secara keseluruhan setelah \textit{tuning}.}
+\todo{Tambahkan kesimpulan untuk KNN dan model terbaik secara keseluruhan setelah
+\textit{tuning}.}
 
 \section{Saran}
 

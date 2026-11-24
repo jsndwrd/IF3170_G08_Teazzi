@@ -108,6 +108,13 @@ Tabel~\ref{tab:ablasi}.
 	\end{tabular}
 \end{table}
 
+Varian \texttt{lr} pada \textit{notebook} utama adalah konfigurasi pembanding
+umum: fitur numerik dan kategorikal diproses oleh \texttt{Preprocessor}, lalu
+fitur numerik tertentu dibagi menjadi 20 \textit{bin} kuantil. Eksperimen
+submisi c010 memakai jalur fitur terpisah di
+\texttt{src/logistic\_submission.py}; karena itu hasilnya tidak dicampur dengan
+skor varian \texttt{lr} pada tabel perbandingan model.
+
 \section{Pembagian Data}
 
 Fungsi \texttt{split} membagi \texttt{train.csv} (27.373 baris) menjadi 80\%
@@ -398,6 +405,32 @@ semua kolom. \texttt{Preprocessor} juga menyediakan opsi \texttt{minmax} dan
 
 \lstinputlisting[caption={\texttt{Preprocessor.fit} dan \texttt{transform} (\texttt{src/preprocessing.py})},linerange={103,109-117,120-148,151-154}]{../src/preprocessing.py}
 \lstinputlisting[caption={Fitur sebelum imputasi dan imputasi kelompok (\texttt{src/preprocessing.py})},linerange={208-231}]{../src/preprocessing.py}
+
+\section{Fitur Eksperimen Logistic Regression c010}
+\label{sec:lr-c010-features}
+
+Eksperimen c010 membandingkan tiga \textit{solver} pada matriks fitur yang sama.
+Fitur awal mencakup transformasi siklik bulan dan hari kedatangan, logaritma
+\textit{lead time} dan harga, serta interaksi pasangan fitur numerik. Matriks
+tersebut ditambah fitur kemiripan radial terhadap titik acuan yang dipilih secara
+acak dengan \textit{seed} tetap, fitur statistik untuk kombinasi atribut
+pemesanan, statistik pada jendela tanggal atau nilai numerik yang berdekatan,
+dan fitur kepadatan tetangga kelas 0 dan 1.
+
+Fitur statistik kombinasi menggunakan \textit{smoothing} bernilai 5 dan
+menyertakan jumlah baris pada setiap kombinasi. Statistik kombinasi, jendela,
+dan kepadatan untuk data latih dihitung secara \textit{out-of-fold} dengan lima
+\textit{fold} terstratifikasi dan \textit{seed} 42. Dengan demikian, label
+suatu baris tidak dipakai untuk membuat fitur baris itu sendiri. Fitur validasi
+dan uji dihitung memakai seluruh bagian data latih yang tersedia.
+
+Pada konfigurasi c010, fitur konteks, jendela, dan kepadatan diaktifkan.
+Kepadatan dihitung dari banyaknya contoh kelas 0 dan kelas 1 dalam radius
+tertentu pada ruang fitur lokal. Implementasi \texttt{cKDTree} dari SciPy hanya
+mempercepat pencarian tetangga tersebut; fungsi objektif Logistic Regression
+dan seluruh \textit{solver} tetap dihitung sendiri dengan NumPy. Jadi, ketiga
+\textit{solver} menerima representasi fitur yang identik dan perbandingan
+berfokus pada proses optimisasinya.
 
 \section{Ringkasan Pengaruh \textit{Preprocessing}}
 
